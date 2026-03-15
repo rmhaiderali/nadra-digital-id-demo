@@ -1,0 +1,26 @@
+html {
+  white-space: nowrap;
+  color-scheme: light dark
+}
+
+body:has(.no-margin) {
+  margin: 0
+}
+
+html,
+body {
+  width: fit-content
+}
+
+table {
+  border-spacing: 6px 3px
+}
+
+@keyframes slide {
+  0% {
+    top: 0
+  }
+  100% {
+    top: calc(100% - 3px)
+  }
+}
