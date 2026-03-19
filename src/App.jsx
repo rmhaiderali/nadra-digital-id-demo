@@ -1,19 +1,15 @@
 import { useState } from "react"
 import { DateTime } from "luxon"
-import { Fraction } from "fraction.js"
 import { toast } from "react-toastify"
 import nadraDigitalId from "nadra-digital-id"
-import { Scanner } from "@yudiel/react-qr-scanner"
+import Scanner from "./Scanner.jsx"
 
 // nadraDigitalId.setDebug(true)
 
-function App() {
-  const [stats, setStats] = useState(false)
-  const [torch, setTorch] = useState(false)
-  const [torchAvailable, setTorchAvailable] = useState(false)
+export default function App() {
+  const [devices, setDevices] = useState(null)
+  const [currentDeviceIndex, setCurrentDeviceIndex] = useState(null)
 
-  const [deviceIndex, setDeviceIndex] = useState(0)
-  const [facingMode, setFacingMode] = useState("environment")
   const [is12HourCycle, setIs12HourCycle] = useState(() =>
     JSON.parse(localStorage.getItem("is12HourCycle") ?? "true"),
   )
@@ -39,28 +35,6 @@ function App() {
   const [decodedData, setDecodedData] = useState(null)
   const [decryptedData, setDecryptedData] = useState(null)
   const [isDocumentVerified, setIsDocumentVerified] = useState(false)
-
-  const [dimensions, setDimensions] = useState(null)
-  const [orgDimensions, setOrgDimensions] = useState(null)
-
-  const [devices, setDevices] = useState([])
-  const currentDevice = devices?.[deviceIndex]
-
-  const width = dimensions?.width
-  const height = dimensions?.height
-  const orgWidth = orgDimensions?.width
-  const orgHeight = orgDimensions?.height
-
-  const isMobile = navigator.userAgent.match(/Android|iPhone/i)
-
-  const [swapWidth, swapHeight] = isMobile ? [height, width] : [width, height]
-
-  const [swapOrgWidth, swapOrgHeight] = isMobile
-    ? [orgHeight, orgWidth]
-    : [orgWidth, orgHeight]
-
-  const aspectRatio = new Fraction(swapWidth, swapHeight).toFraction()
-  const orgAspectRatio = new Fraction(swapOrgWidth, swapOrgHeight).toFraction()
 
   if (step === 3) {
     return (
@@ -312,36 +286,16 @@ function App() {
     )
   }
 
-  // console.log("devices", devices)
-  // console.log("currentDevice", currentDevice)
-  // console.log("deviceId", currentDevice?.deviceId)
-
   return (
     <div
       className="no-margin"
       style={{ width: "100dvw", height: "100dvh", background: "black" }}
     >
       <Scanner
-        components={{ finder: false }}
-        formats={["qr_code"]}
-        constraints={{
-          width,
-          height,
-          facingMode: null,
-          resizeMode: "none",
-          advanced: [{ torch }],
-          deviceId: currentDevice?.deviceId,
-        }}
-        styles={{
-          video: {
-            objectFit: "contain",
-            transform: facingMode === "user" ? "scaleX(-1)" : "none",
-          },
-          container: { display: dimensions ? "block" : "none" },
-        }}
-        onResult={(result, error) => {
-          console.log("result", result, "error", error)
-        }}
+        devices={devices}
+        setDevices={setDevices}
+        currentDeviceIndex={currentDeviceIndex}
+        setCurrentDeviceIndex={setCurrentDeviceIndex}
         onScan={(detectedCodes) => {
           const data = detectedCodes[0]?.rawValue
 
@@ -358,128 +312,7 @@ function App() {
           setDecodedData(decoded)
           setStep(1)
         }}
-        onCamera={async ({ capabilities, settings, currentVideoTrack }) => {
-          const constraints = currentVideoTrack?.current?.getConstraints()
-
-          function stringOrNull(value) {
-            return typeof value === "string" ? value : null
-          }
-
-          const facingMode =
-            stringOrNull(settings?.facingMode) ??
-            stringOrNull(constraints?.facingMode) ??
-            stringOrNull(capabilities?.facingMode?.[0]) ??
-            (currentDevice?.label.match(/front|user|Integrated Webcam/i)
-              ? "user"
-              : "environment")
-
-          // console.log("facingMode", facingMode)
-          setFacingMode(facingMode)
-
-          const w = capabilities?.width?.max
-          const h = capabilities?.height?.max
-          if (!w || !h) return
-          if (w === width && h === height) return
-
-          // console.log("settings", settings)
-          // console.log("constraints", constraints)
-          // console.log("capabilities", capabilities)
-          // console.log("currentVideoTrack", currentVideoTrack)
-
-          const s = Math.min(w, h)
-          const d = s / Math.min(1000, s)
-          setOrgDimensions({ width: w, height: h })
-          setDimensions({
-            width: Math.round(w / d),
-            height: Math.round(h / d),
-          })
-
-          const devices = await navigator.mediaDevices.enumerateDevices()
-          setDevices(devices.filter((d) => d.kind === "videoinput"))
-
-          setTorchAvailable(capabilities?.torch)
-        }}
       />
-      <div
-        style={{
-          inset: 0,
-          position: "absolute",
-          alignContent: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div
-          style={{
-            aspectRatio,
-            margin: "auto",
-            maxWidth: "100%",
-            maxHeight: "100%",
-          }}
-          onClick={() => setStats((s) => !s)}
-        >
-          <div
-            style={{
-              color: "white",
-              background: "#000",
-              position: "absolute",
-              fontFamily: "serif",
-              display: stats ? "block" : "none",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ width: "100%" }}>
-              <div style={{ margin: "4px" }}>Facing mode: {facingMode}</div>
-              <div style={{ margin: "4px" }}>
-                Device: {currentDevice?.label}
-              </div>
-              <div style={{ margin: "4px" }}>
-                Width: {swapWidth}, Height: {swapHeight}, Ratio:{" "}
-                {orgAspectRatio}
-              </div>
-              {devices?.length > 1 && (
-                <div
-                  onClick={() =>
-                    setDeviceIndex((deviceIndex + 1) % devices.length)
-                  }
-                  style={{ margin: "4px", cursor: "pointer", color: "#00bfff" }}
-                >
-                  {"Change to "}
-                  {devices?.[(deviceIndex + 1) % devices.length]?.label}
-                </div>
-              )}
-              {torchAvailable && (
-                <div
-                  onClick={() => setTorch((prev) => !prev)}
-                  style={{
-                    margin: "4px",
-                    cursor: "pointer",
-                    color: "#ffff00cf",
-                  }}
-                >
-                  {torch ? "Turn off" : "Turn on"} torch
-                </div>
-              )}
-            </div>
-          </div>
-          <div
-            style={{
-              width: "100%",
-              color: "black",
-              minHeight: "3px",
-              background: "red",
-              textAlign: "center",
-              position: "relative",
-              animation: dimensions
-                ? "slide 6s ease-in-out infinite alternate"
-                : "none",
-            }}
-          >
-            {!dimensions && "Give camera access and reload"}
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
-
-export default App
