@@ -132,7 +132,7 @@ export default function Scanner({
     worker.onmessage = (e) => onScan(e.data)
 
     const intervalId = setInterval(() => {
-      if (videoRef.current && videoRef.current.readyState === 4)
+      if (videoRef.current && videoRef.current.readyState === 4 && !disabled)
         createImageBitmap(videoRef.current).then((bitmap) => {
           worker.postMessage(bitmap, [bitmap])
         })
