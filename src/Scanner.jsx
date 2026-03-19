@@ -3,6 +3,12 @@ import { useEffect, useState, useRef } from "react"
 import { Fraction } from "fraction.js"
 import Worker from "./worker.js?worker"
 
+screen.orientation ??= {
+  angle: 0,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+}
+
 function getTrackInfo(track) {
   const c = track.getCapabilities()
   return {
@@ -24,11 +30,12 @@ export default function Scanner({
 }) {
   const videoRef = useRef(null)
   const streamRef = useRef(null)
-  const [disabled, setDisabled] = useState(false)
-  const [facingMode, setFacingMode] = useState("environment")
-  const [orientation, setOrientation] = useState(screen.orientation)
   const [stats, setStats] = useState(false)
   const [torch, setTorch] = useState(false)
+  const [disabled, setDisabled] = useState(false)
+  const [dimensions, setDimensions] = useState({})
+  const [facingMode, setFacingMode] = useState("environment")
+  const [orientation, setOrientation] = useState(screen.orientation)
 
   const currentDevice = devices?.[currentDeviceIndex]
 
@@ -36,61 +43,14 @@ export default function Scanner({
 
   const isRotatedSideways = orientation.angle % 180 !== 0
 
-  const isLensAndDeviceOrientationSame = orientation.type.startsWith(
-    isRotatedSideways ? "portrait" : "landscape",
-  )
-
-  // console.log({
-  //   orientation,
-  //   isRotatedSideways,
-  //   isLensAndDeviceOrientationSame,
-  // })
-
-  const width = currentDevice?.info[0].width
-  const height = currentDevice?.info[0].height
-
-  const doesDimensionsExist = [width, height].every(Number.isFinite)
-
-  const [swapedWidth, swapedHeight] = isLensAndDeviceOrientationSame
-    ? [width, height]
-    : [height, width]
-
-  const small = Math.min(width, height)
-  const divisor = small / Math.min(1000, small)
-
-  const [scaledWidth, scaledHeight] = doesDimensionsExist
-    ? [width / divisor, height / divisor].map(Math.round)
-    : []
-
-  const [scaledSwapedWidth, scaledSwapedHeight] = isLensAndDeviceOrientationSame
-    ? [scaledWidth, scaledHeight]
-    : [scaledHeight, scaledWidth]
-
-  // console.log({
-  //   small,
-  //   divisor,
-  //   width,
-  //   height,
-  //   swapedWidth,
-  //   swapedHeight,
-  //   scaledWidth,
-  //   scaledHeight,
-  //   scaledSwapedWidth,
-  //   scaledSwapedHeight,
-  // })
-
-  const swapedAspectRatio = new Fraction(swapedWidth, swapedHeight).toFraction()
-
-  const scaledSwapedAspectRatio = new Fraction(
-    scaledSwapedWidth,
-    scaledSwapedHeight,
-  ).toFraction()
-
-  // console.log({ swapedAspectRatio, scaledSwapedAspectRatio })
-
   useEffect(() => {
-    const handleChange = (event) => {
+    const handleChange = async (event) => {
       setOrientation(event.target)
+      if (videoRef.current) {
+        await wait(100)
+        const { videoWidth, videoHeight } = videoRef.current
+        setDimensions({ width: videoWidth, height: videoHeight })
+      }
     }
 
     screen.orientation.addEventListener("change", handleChange)
@@ -197,7 +157,7 @@ export default function Scanner({
           ? Array.isArray(currentDevice.info[0].facingMode)
             ? currentDevice.info[0].facingMode[0]
             : currentDevice.info[0].facingMode
-          : currentDevice.device.label.match(/front|user|Integrated Webcam/i)
+          : /front|user|Integrated Webcam/i.test(currentDevice.device.label)
             ? "user"
             : "environment",
       )
@@ -210,13 +170,22 @@ export default function Scanner({
         await wait(delay)
       }
 
+      const w = currentDevice.info[0].width
+      const h = currentDevice.info[0].height
+
+      const small = Math.min(w, h)
+      const divisor = small / Math.min(1000, small)
+
+      const width = Math.round(w / divisor)
+      const height = Math.round(h / divisor)
+
       const options = {
         audio: false,
         video: {
           torch,
+          width,
+          height,
           resizeMode: "none",
-          width: scaledWidth,
-          height: scaledHeight,
           deviceId: currentDevice.device.deviceId,
         },
       }
@@ -231,6 +200,30 @@ export default function Scanner({
 
     if (videoRef.current && currentDevice) changeStream()
   }, [videoRef, currentDevice, torch])
+
+  const isFirefox = /Firefox/i.test(navigator.userAgent)
+  const isAndroid = /Android/i.test(navigator.userAgent)
+
+  const [width, height] =
+    isFirefox && isAndroid && isRotatedSideways
+      ? [dimensions.height, dimensions.width]
+      : [dimensions.width, dimensions.height]
+
+  const aspectRatio = new Fraction(width, height)
+
+  const manualRotationStyle =
+    isFirefox && isAndroid
+      ? {
+          rotate: -orientation.angle + "deg",
+          scale: isRotatedSideways ? aspectRatio.valueOf() : 1,
+        }
+      : {}
+
+  const videoStyles = {
+    maxWidth: "100%",
+    maxHeight: "100%",
+    transform: facingMode === "user" ? "scaleX(-1)" : "none",
+  }
 
   return (
     <div>
@@ -248,17 +241,17 @@ export default function Scanner({
           playsInline
           // controls
           ref={videoRef}
-          style={{
-            maxWidth: "100%",
-            maxHeight: "100%",
-            // rotate: -orientation.angle + "deg",
-            transform: facingMode === "user" ? "scaleX(-1)" : "none",
+          style={Object.assign(videoStyles, manualRotationStyle)}
+          onPlay={(e) => {
+            const { videoWidth, videoHeight } = e.target
+            setDimensions({ width: videoWidth, height: videoHeight })
           }}
         />
       </div>
       <div
         style={{
           inset: 0,
+          height: "100dvh",
           position: "absolute",
           alignContent: "center",
           justifyContent: "center",
@@ -269,7 +262,7 @@ export default function Scanner({
             margin: "auto",
             maxWidth: "100%",
             maxHeight: "100%",
-            aspectRatio: scaledSwapedAspectRatio,
+            aspectRatio: aspectRatio.toFraction(),
           }}
           onClick={() => setStats((s) => !s)}
         >
@@ -289,8 +282,8 @@ export default function Scanner({
                 Device: {currentDevice?.device.label}
               </div>
               <div style={{ margin: "4px" }}>
-                Width: {scaledSwapedWidth}, Height: {scaledSwapedHeight}, Ratio:{" "}
-                {swapedAspectRatio}
+                Width: {width}, Height: {height}, Ratio:{" "}
+                {aspectRatio.toFraction()}
               </div>
               {devices?.length > 1 && (
                 <div
