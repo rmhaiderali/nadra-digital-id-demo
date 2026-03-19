@@ -131,11 +131,15 @@ export default function Scanner({
 
     worker.onmessage = (e) => onScan(e.data)
 
-    const intervalId = setInterval(() => {
-      if (videoRef.current && videoRef.current.readyState === 4 && !disabled)
-        createImageBitmap(videoRef.current).then((bitmap) => {
+    const intervalId = setInterval(async () => {
+      if (videoRef.current && videoRef.current.readyState === 4 && !disabled) {
+        try {
+          const bitmap = await createImageBitmap(videoRef.current)
           worker.postMessage(bitmap, [bitmap])
-        })
+        } catch (e) {
+          console.log(e)
+        }
+      }
     }, scanDelay)
 
     return async () => {
@@ -153,13 +157,12 @@ export default function Scanner({
       videoRef.current.srcObject = null
 
       setFacingMode(
-        currentDevice.info[0].facingMode
-          ? Array.isArray(currentDevice.info[0].facingMode)
-            ? currentDevice.info[0].facingMode[0]
-            : currentDevice.info[0].facingMode
-          : /front|user|Integrated Webcam/i.test(currentDevice.device.label)
+        (Array.isArray(currentDevice.info[0].facingMode)
+          ? currentDevice.info[0].facingMode[0]
+          : currentDevice.info[0].facingMode) ??
+          (/front|user|Integrated Webcam/i.test(currentDevice.device.label)
             ? "user"
-            : "environment",
+            : "environment"),
       )
 
       if (streamRef.current) {
