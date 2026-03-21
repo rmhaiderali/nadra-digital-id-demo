@@ -38,7 +38,7 @@ export default function App() {
 
   if (step === 3) {
     return (
-      <div>
+      <div className="whitespace-nowrap">
         <table>
           <tbody>
             <tr>
@@ -175,7 +175,7 @@ export default function App() {
 
   if (step === 1) {
     return (
-      <table>
+      <table className="whitespace-nowrap">
         <tbody>
           <tr>
             <td>QR Code PIN</td>

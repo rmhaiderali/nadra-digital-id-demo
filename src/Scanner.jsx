@@ -29,7 +29,9 @@ export default function Scanner({
   scanDelay = 500,
 }) {
   const videoRef = useRef(null)
+  const inputRef = useRef(null)
   const streamRef = useRef(null)
+  const workerRef = useRef(null)
   const [stats, setStats] = useState(false)
   const [torch, setTorch] = useState(false)
   const [disabled, setDisabled] = useState(false)
@@ -129,15 +131,15 @@ export default function Scanner({
 
     if (!devices && !currentDeviceIndex) initialize()
 
-    const worker = new Worker()
+    workerRef.current = new Worker()
 
-    worker.onmessage = (e) => onScan(e.data)
+    workerRef.current.onmessage = (e) => onScan(e.data)
 
     const intervalId = setInterval(async () => {
       if (videoRef.current && videoRef.current.readyState === 4 && !disabled) {
         try {
           const bitmap = await createImageBitmap(videoRef.current)
-          worker.postMessage(bitmap, [bitmap])
+          workerRef.current.postMessage(bitmap, [bitmap])
         } catch (e) {
           console.log(e)
         }
@@ -146,7 +148,7 @@ export default function Scanner({
 
     return async () => {
       clearInterval(intervalId)
-      worker.terminate()
+      workerRef.current.terminate()
       if (streamRef.current) {
         for (const track of streamRef.current.getTracks()) track.stop()
         await wait(delay)
@@ -232,6 +234,18 @@ export default function Scanner({
 
   return (
     <div>
+      <input
+        type="file"
+        ref={inputRef}
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={async (e) => {
+          const file = e.target.files[0]
+          if (!file && !workerRef.current) return
+          const bitmap = await createImageBitmap(file)
+          workerRef.current.postMessage(bitmap, [bitmap])
+        }}
+      />
       <div
         style={{
           display: "flex",
@@ -274,6 +288,7 @@ export default function Scanner({
           onClick={() => setStats((s) => !s)}
         >
           <div
+            className="whitespace-nowrap"
             style={{
               color: "white",
               background: "#000",
@@ -291,6 +306,20 @@ export default function Scanner({
               <div style={{ margin: "4px" }}>
                 Width: {width}, Height: {height}, Ratio:{" "}
                 {aspectRatio.toFraction()}
+              </div>
+              <div
+                onClick={() => {
+                  if (disabled && !workerRef.current) return
+                  inputRef.current.value = null
+                  inputRef.current.click()
+                }}
+                style={{
+                  margin: "4px",
+                  cursor: "pointer",
+                  color: disabled ? "gray" : "#00bfff",
+                }}
+              >
+                Scan from Image
               </div>
               {devices?.length > 1 && (
                 <div

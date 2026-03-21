@@ -1,5 +1,4 @@
 html {
-  white-space: nowrap;
   color-scheme: light dark
 }
 
@@ -14,6 +13,10 @@ body {
 
 table {
   border-spacing: 6px 3px
+}
+
+.whitespace-nowrap {
+  white-space: nowrap
 }
 
 @keyframes slide {
