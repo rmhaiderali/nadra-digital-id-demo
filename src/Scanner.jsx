@@ -49,7 +49,9 @@ export default function Scanner({
       if (videoRef.current) {
         await wait(100)
         const { videoWidth, videoHeight } = videoRef.current
-        setDimensions({ width: videoWidth, height: videoHeight })
+        if (videoWidth && videoHeight) {
+          setDimensions({ width: videoWidth, height: videoHeight })
+        }
       }
     }
 
@@ -247,7 +249,9 @@ export default function Scanner({
           style={Object.assign(videoStyles, manualRotationStyle)}
           onPlay={(e) => {
             const { videoWidth, videoHeight } = e.target
-            setDimensions({ width: videoWidth, height: videoHeight })
+            if (videoWidth && videoHeight) {
+              setDimensions({ width: videoWidth, height: videoHeight })
+            }
           }}
         />
       </div>
