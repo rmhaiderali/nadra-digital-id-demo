@@ -1,0 +1,1 @@
+html{color-scheme:light dark}body:has(.no-margin){margin:0}html,body{width:fit-content}table{border-spacing:6px 3px}.whitespace-nowrap{white-space:nowrap}@keyframes slide{0%{top:0}to{top:calc(100% - 3px)}}
