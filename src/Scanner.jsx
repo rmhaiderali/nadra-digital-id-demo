@@ -360,11 +360,11 @@ export default function Scanner({
           <div
             style={{
               width: "100%",
-              color: "black",
+              color: "white",
               minHeight: "3px",
-              background: "red",
               textAlign: "center",
               position: "relative",
+              background: "#026735",
               animation: currentDevice
                 ? "slide 6s ease-in-out infinite alternate"
                 : "none",
