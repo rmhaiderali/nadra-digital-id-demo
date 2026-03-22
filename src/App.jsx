@@ -296,7 +296,7 @@ export default function App() {
         setDevices={setDevices}
         currentDeviceIndex={currentDeviceIndex}
         setCurrentDeviceIndex={setCurrentDeviceIndex}
-        onScan={(detectedCodes) => {
+        onScan={async (detectedCodes) => {
           const data = detectedCodes[0]?.rawValue
 
           const { data: decoded, error: decodeError } =
@@ -306,6 +306,16 @@ export default function App() {
             toast.error(
               "Failed to decode, make sure its NADRA Digital ID QR code",
             )
+            return
+          }
+
+          if ("credentialSubject" in decoded) {
+            const { error: verificationError } =
+              await nadraDigitalId.verify(decoded)
+
+            setIsDocumentVerified(!verificationError)
+            setDecryptedData(decoded)
+            setStep(3)
             return
           }
 
