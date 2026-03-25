@@ -309,6 +309,8 @@ export default function App() {
             return
           }
 
+          console.log(decoded)
+
           if ("credentialSubject" in decoded) {
             const { error: verificationError } =
               await nadraDigitalId.verify(decoded)

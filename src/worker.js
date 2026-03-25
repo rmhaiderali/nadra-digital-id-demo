@@ -1,4 +1,11 @@
-import { BarcodeDetector } from "barcode-detector"
+import { BarcodeDetector, prepareZXingModule } from "barcode-detector"
+import zxingReaderWasmUrl from "/node_modules/zxing-wasm/dist/reader/zxing_reader.wasm?url"
+
+const filePaths = { "zxing_reader.wasm": zxingReaderWasmUrl }
+
+prepareZXingModule({
+  overrides: { locateFile: (path, prefix) => filePaths[path] ?? path + prefix },
+})
 
 const detector = new BarcodeDetector({ formats: ["qr_code"] })
 
