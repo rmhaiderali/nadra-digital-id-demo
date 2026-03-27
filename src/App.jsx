@@ -4,7 +4,37 @@ import { toast } from "react-toastify"
 import nadraDigitalId from "nadra-digital-id"
 import Scanner from "./Scanner.jsx"
 
+import { writeBarcode, prepareZXingModule } from "zxing-wasm/writer"
+import zxingWriterWasmUrl from "/node_modules/zxing-wasm/dist/writer/zxing_writer.wasm?url"
+
 // nadraDigitalId.setDebug(true)
+
+const filePaths = { "zxing_writer.wasm": zxingWriterWasmUrl }
+
+prepareZXingModule({
+  overrides: { locateFile: (path, prefix) => filePaths[path] ?? path + prefix },
+})
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+async function downloadQRCode(data, filename) {
+  const options = { format: "QRCode", scale: 4 }
+  const { error, image } = await writeBarcode(data, options)
+  if (error) {
+    toast.error("Failed to generate QR code")
+    return
+  }
+  downloadBlob(image, filename)
+}
 
 export default function App() {
   const [devices, setDevices] = useState(null)
@@ -73,6 +103,74 @@ export default function App() {
                   style={{ width: "-webkit-fill-available" }}
                 >
                   Use {is12HourCycle ? "24h" : "12h"} Time Format
+                </button>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <button
+                  style={{ width: "-webkit-fill-available" }}
+                  onClick={async () => {
+                    // const pin = "0000"
+                    // const date = new Date()
+                    // const { proof, ...vc } = JSON.parse(JSON.stringify(decryptedData))
+
+                    // date.setHours(0, 0, 0, 0)
+
+                    // const { data: signature, error: signingError } =
+                    //   await nadraDigitalId.sign(vc)
+
+                    // if (signingError) {
+                    //   toast.error("Failed to sign vc")
+                    //   return
+                    // }
+
+                    // const signedVC = { ...vc, proof: { ...proof, jws: signature } }
+
+                    // const { data: encryptedData, error: encryptDataError } =
+                    //   nadraDigitalId.encrypt(JSON.stringify(signedVC), pin, date)
+
+                    // if (encryptDataError) {
+                    //   toast.error("Failed to encrypt vc")
+                    //   return
+                    // }
+
+                    // const { data: encryptedDate, error: encryptDateError } =
+                    //   nadraDigitalId.encrypt(
+                    //     DateTime.fromJSDate(date).toFormat("yyyy-MM-dd HH:mm:ss"),
+                    //     pin,
+                    //     date,
+                    //   )
+
+                    // if (encryptDateError) {
+                    //   toast.error("Failed to encrypt date")
+                    //   return
+                    // }
+
+                    // const objectToEncode = {
+                    //   v: "1.0ce",
+                    //   hash: nadraDigitalId.sha256(pin).data,
+                    //   date: encryptedDate,
+                    //   vc: encryptedData,
+                    //   fields: [-1],
+                    // }
+
+                    // const jsonString = JSON.stringify(objectToEncode)
+
+                    const jsonString = JSON.stringify(decryptedData)
+
+                    const { data: encodedData, error: encodeError } =
+                      nadraDigitalId.encode(jsonString)
+
+                    if (encodeError) {
+                      toast.error("Failed to encode data")
+                      return
+                    }
+
+                    downloadQRCode(encodedData, "nadra-digital-id-qr-code.png")
+                  }}
+                >
+                  Download QR Code
                 </button>
               </td>
             </tr>
@@ -246,6 +344,7 @@ export default function App() {
 
                   setTimeout(async () => {
                     let vc = null
+                    let date = null
 
                     for (const time of timeValues) {
                       const result = nadraDigitalId.decrypt(
@@ -256,6 +355,12 @@ export default function App() {
                       if (result.data) {
                         try {
                           vc = JSON.parse(result.data)
+                          const r = nadraDigitalId.decrypt(
+                            decodedData.date,
+                            pin,
+                            time,
+                          )
+                          if (r.data) date = new Date(r.data)
                           break
                         } catch (e) {}
                       }
@@ -266,6 +371,8 @@ export default function App() {
                       toast.error("Wrong Generation Date")
                       return
                     }
+
+                    console.log({ vc, date })
 
                     const { error: verificationError } =
                       await nadraDigitalId.verify(vc)
@@ -309,19 +416,27 @@ export default function App() {
             return
           }
 
-          console.log(decoded)
+          let decodedObject
+          try {
+            decodedObject = JSON.parse(decoded)
+          } catch (e) {
+            toast.error("Failed to parse decoded data")
+            return
+          }
 
-          if ("credentialSubject" in decoded) {
+          console.log(decodedObject)
+
+          if ("credentialSubject" in decodedObject) {
             const { error: verificationError } =
-              await nadraDigitalId.verify(decoded)
+              await nadraDigitalId.verify(decodedObject)
 
             setIsDocumentVerified(!verificationError)
-            setDecryptedData(decoded)
+            setDecryptedData(decodedObject)
             setStep(3)
             return
           }
 
-          setDecodedData(decoded)
+          setDecodedData(decodedObject)
           setStep(1)
         }}
       />
