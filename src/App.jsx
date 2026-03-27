@@ -163,7 +163,7 @@ export default function App() {
         <h3 style={{ marginBottom: "8px" }}>
           {isDocumentVerified
             ? "✅ This document is Authentic"
-            : "⚠️ This document is Tampered"}
+            : "⚠️ Authenticity could not be verified"}
         </h3>
       </div>
     )
