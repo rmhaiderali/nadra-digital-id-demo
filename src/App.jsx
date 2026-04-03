@@ -83,9 +83,6 @@ function unixDayToDate(unixDay) {
   return new Date(unixDay * dayMs)
 }
 
-window.dateToUnixDay = dateToUnixDay
-window.unixDayToDate = unixDayToDate
-
 const superiorDateFormat = "yyyy" + dateDelimiter + "MM" + dateDelimiter + "dd"
 
 window.iamagoodguy = () => {
