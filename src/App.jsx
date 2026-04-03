@@ -1,9 +1,10 @@
-import { useState } from "react"
+import ms from "ms"
 import { DateTime } from "luxon"
 import { toast } from "react-toastify"
+import { useState, useRef } from "react"
 import nadraDigitalId from "nadra-digital-id"
 import Scanner from "./Scanner.jsx"
-
+import Loading from "./Loading.jsx"
 import { writeBarcode, prepareZXingModule } from "zxing-wasm/writer"
 import zxingWriterWasmUrl from "/node_modules/zxing-wasm/dist/writer/zxing_writer.wasm?url"
 
@@ -26,6 +27,39 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url)
 }
 
+function range(start, end, step = 1) {
+  const result = []
+  for (let i = start; i <= end; i += step) result.push(i)
+  return result
+}
+
+function chunkArray(arr, size) {
+  const result = []
+
+  for (let i = 0; i < arr.length; i += size) {
+    result.push(arr.slice(i, i + size))
+  }
+
+  return result
+}
+
+function passwordRangeToString(range) {
+  const start = range[0]
+  const end = range.at(-1)
+  const formattedStart = start.toString().padStart(4, "0")
+  const formattedEnd = end.toString().padStart(4, "0")
+  return formattedStart + " - " + formattedEnd
+}
+
+function isValidBase64(str) {
+  try {
+    // throw new Error("Invalid Base64")
+    return btoa(atob(str)) === str
+  } catch (err) {
+    return false
+  }
+}
+
 async function downloadQRCode(data, filename) {
   const options = { format: "QRCode", scale: 4 }
   const { error, image } = await writeBarcode(data, options)
@@ -35,6 +69,32 @@ async function downloadQRCode(data, filename) {
   }
   downloadBlob(image, filename)
 }
+
+const dateDelimiter =
+  new Date().toLocaleDateString().match(/[\-|\/|\.|]/)?.[0] || "/"
+
+const dayMs = ms("1d")
+
+function dateToUnixDay(date) {
+  return Math.floor(date.getTime() / dayMs)
+}
+
+function unixDayToDate(unixDay) {
+  return new Date(unixDay * dayMs)
+}
+
+window.dateToUnixDay = dateToUnixDay
+window.unixDayToDate = unixDayToDate
+
+const superiorDateFormat = "yyyy" + dateDelimiter + "MM" + dateDelimiter + "dd"
+
+window.iamagoodguy = () => {
+  localStorage.setItem("goodguy", "true")
+  toast.success("Yes, you are a good guy! 😇")
+  setTimeout(() => window.location.reload(), 2000)
+}
+
+const isGoodGuy = localStorage.getItem("goodguy") === "true"
 
 export default function App() {
   const [devices, setDevices] = useState(null)
@@ -53,18 +113,217 @@ export default function App() {
   }
 
   // 0: scan
-  // 1: ask for pin and genration date
+  // 1: ask for pin and generation date
   // 2: decrypting
   // 3: show data
   const [step, setStep] = useState(0)
 
   const [pin, setPin] = useState("")
-  const [generationDate, setGenerationDate] = useState(() =>
-    DateTime.now().startOf("day").toISODate(),
-  )
+  const [generationDate, setGenerationDate] = useState("")
   const [decodedData, setDecodedData] = useState(null)
   const [decryptedData, setDecryptedData] = useState(null)
   const [isDocumentVerified, setIsDocumentVerified] = useState(false)
+
+  const [crackedPin, setCrackedPin] = useState("")
+  const [crackingPinRange, setCrackingPinRange] = useState("")
+  const [crackingPinStatus, _setCrackingPinStatus] = useState("not started")
+  //
+  const crackingPinStatusRef = useRef(crackingPinStatus)
+  const setCrackingPinStatus = (status) => {
+    _setCrackingPinStatus(status)
+    crackingPinStatusRef.current = status
+  }
+  //
+  const [crackedGenerationDate, setCrackedGenerationDate] = useState("")
+  const [crackingGenerationDateRange, setCrackingGenerationDateRange] =
+    useState("")
+  const [crackingGenerationDateStatus, _setCrackingGenerationDateStatus] =
+    useState("not started")
+  //
+  const crackingGenerationDateStatusRef = useRef(crackingGenerationDateStatus)
+  const setCrackingGenerationDateStatus = (status) => {
+    _setCrackingGenerationDateStatus(status)
+    crackingGenerationDateStatusRef.current = status
+  }
+  //
+  const [crackGenerationDateStart, setCrackGenerationDateStart] = useState("")
+  const [crackGenerationDateEnd, setCrackGenerationDateEnd] = useState("")
+
+  function scanAgain() {
+    setStep(0)
+
+    setPin("")
+    setCrackedPin("")
+    setCrackingPinStatus("not started")
+
+    setGenerationDate()
+    setCrackedGenerationDate("")
+    setCrackingGenerationDateStatus("not started")
+
+    setCrackGenerationDateStart("")
+    setCrackGenerationDateEnd("")
+  }
+
+  async function crackPin() {
+    setCrackingPinStatus("cracking")
+
+    const pinHash = decodedData.hash
+
+    if (!pinHash) {
+      setCrackingPinStatus("error")
+      console.log("No hash found in the QR code data.")
+      return
+    }
+
+    if (pinHash.length !== 64) {
+      setCrackingPinStatus("error")
+      console.log("Wrong hash length. Not valid SHA-256 hash.")
+      return
+    }
+
+    let error = false
+    let crackedPin = null
+
+    main: for (const chunk of chunkArray(range(0, 999999), 100)) {
+      setCrackingPinRange(passwordRangeToString(chunk))
+
+      // wait a tick to update the UI with the new range being tried
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      if (crackingPinStatusRef.current !== "cracking") return
+
+      for (const i of chunk) {
+        const pinsToCrack = []
+
+        if (i < 10000) pinsToCrack.push(i.toString().padStart(4, "0"))
+
+        if (i < 100000) pinsToCrack.push(i.toString().padStart(5, "0"))
+
+        pinsToCrack.push(i.toString().padStart(6, "0"))
+
+        for (const pinToCrack of pinsToCrack) {
+          const { data: possiblePinHash, error: possiblePinHashError } =
+            nadraDigitalId.sha256(pinToCrack)
+
+          if (possiblePinHashError) {
+            console.log("Error while cracking PIN:", possiblePinHashError)
+            error = true
+            break main
+          }
+
+          if (pinHash === possiblePinHash) {
+            crackedPin = pinToCrack
+            break main
+          }
+        }
+      }
+    }
+
+    setCrackingPinRange("")
+
+    if (error) {
+      setCrackedPin("")
+      setCrackingPinStatus("error")
+      return
+    }
+
+    if (crackedPin) {
+      setPin(crackedPin)
+      setCrackedPin(crackedPin)
+      setCrackingPinStatus("cracked")
+      return
+    }
+
+    setCrackedPin("")
+    setCrackingPinStatus("not found")
+  }
+
+  async function crackGenerationDate(start, end) {
+    const { data: pinHash, error: pinHashError } = nadraDigitalId.sha256(pin)
+
+    if (pinHashError) {
+      toast.error("Failed to hash PIN")
+      return
+    }
+
+    if (pinHash !== decodedData.hash) {
+      toast.error("Wrong PIN")
+      return
+    }
+
+    setCrackingGenerationDateStatus("cracking")
+
+    const vc = decodedData.vc
+
+    if (!isValidBase64(vc)) {
+      setCrackingGenerationDateStatus("error")
+      console.log("VC is not a valid Base64 string.")
+      return
+    }
+
+    const startUnixDay = dateToUnixDay(start)
+    const endUnixDay = dateToUnixDay(end)
+
+    let error = false
+    let crackedDate = null
+
+    main: for (const unixDay of range(startUnixDay, endUnixDay)) {
+      const dateToCrack = DateTime.fromJSDate(unixDayToDate(unixDay), {
+        zone: "utc",
+      }).setZone("Asia/Karachi", { keepLocalTime: true })
+
+      setCrackingGenerationDateRange(dateToCrack.toFormat(superiorDateFormat))
+
+      const { data: timeValues, error: timeRangeError } =
+        nadraDigitalId.timeRange({
+          bounds: {
+            start: dateToCrack.toJSDate(),
+            end: dateToCrack.endOf("day").toJSDate(),
+          },
+        })
+
+      if (timeRangeError) {
+        console.log("Failed to calculate time range")
+        error = true
+        break main
+      }
+
+      console.log("Time Range", timeValues)
+
+      for (const time of timeValues) {
+        // wait a tick to update the UI with the new range being tried
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        if (crackingGenerationDateStatusRef.current !== "cracking") return
+
+        const result = nadraDigitalId.decrypt(vc, pin, time)
+        if (result.data) {
+          try {
+            JSON.parse(result.data)
+            crackedDate = time
+            break
+          } catch (e) {}
+        }
+      }
+    }
+
+    setCrackingGenerationDateRange("")
+
+    if (error) {
+      setCrackedGenerationDate("")
+      setCrackingGenerationDateStatus("error")
+      return
+    }
+
+    if (crackedDate) {
+      const crackedDateLuxon = DateTime.fromJSDate(crackedDate)
+      setGenerationDate(crackedDateLuxon.toFormat("yyyy-MM-dd"))
+      setCrackedGenerationDate(crackedDateLuxon.toFormat(superiorDateFormat))
+      setCrackingGenerationDateStatus("cracked")
+      return
+    }
+
+    setCrackedGenerationDate("")
+    setCrackingGenerationDateStatus("not found")
+  }
 
   if (step === 3) {
     return (
@@ -74,7 +333,7 @@ export default function App() {
             <tr>
               <td>
                 <button
-                  onClick={() => setStep(0)}
+                  onClick={scanAgain}
                   style={{ width: "-webkit-fill-available" }}
                 >
                   Scan Again
@@ -220,7 +479,8 @@ export default function App() {
                 </td>
                 <td>
                   {DateTime.fromISO(decryptedData.issuanceDate).toFormat(
-                    is12HourCycle ? "yyyy/MM/dd hh:mm a" : "yyyy/MM/dd HH:mm",
+                    superiorDateFormat +
+                      (is12HourCycle ? " hh:mm a" : " HH:mm"),
                   )}
                 </td>
               </tr>
@@ -232,7 +492,8 @@ export default function App() {
                 </td>
                 <td>
                   {DateTime.fromISO(decryptedData.expirationDate).toFormat(
-                    is12HourCycle ? "yyyy/MM/dd hh:mm a" : "yyyy/MM/dd HH:mm",
+                    superiorDateFormat +
+                      (is12HourCycle ? " hh:mm a" : " HH:mm"),
                   )}
                 </td>
               </tr>
@@ -271,6 +532,25 @@ export default function App() {
     return <div>Decrypting Please Wait</div>
   }
 
+  const crackPinAgain = (
+    <button onClick={crackPin} style={{ marginLeft: "4px" }}>
+      Crack Again
+    </button>
+  )
+
+  const crackGenerationDateAgain = (
+    <button
+      onClick={() => {
+        setCrackGenerationDateStart("")
+        setCrackGenerationDateEnd("")
+        setCrackingGenerationDateStatus("select range")
+      }}
+      style={{ marginLeft: "4px" }}
+    >
+      Crack Again
+    </button>
+  )
+
   if (step === 1) {
     return (
       <table className="whitespace-nowrap">
@@ -279,6 +559,7 @@ export default function App() {
             <td>QR Code PIN</td>
             <td>
               <input
+                min={0}
                 value={pin}
                 type="number"
                 placeholder="Enter PIN"
@@ -286,9 +567,52 @@ export default function App() {
                 style={{ width: "-webkit-fill-available" }}
               />
             </td>
+            {isGoodGuy && (
+              <td>
+                {crackingPinStatus === "not started" && (
+                  <button onClick={crackPin}>Crack</button>
+                )}
+                {crackingPinStatus === "cracking" && (
+                  <>
+                    <div
+                      style={{
+                        gap: "6px",
+                        display: "flex",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Loading />
+                      <span>Cracking Range {crackingPinRange}</span>
+                    </div>
+                  </>
+                )}
+                {crackingPinStatus === "not found" && (
+                  <>
+                    <span>No PIN found in range 000000 - 999999</span>
+                    {crackPinAgain}
+                  </>
+                )}
+                {crackingPinStatus === "cracked" && (
+                  <span>Cracked Pin is {crackedPin}</span>
+                )}
+                {crackingPinStatus === "error" && (
+                  <>
+                    <span>Error while cracking PIN</span>
+                    {crackPinAgain}
+                  </>
+                )}
+              </td>
+            )}
           </tr>
+          {crackingGenerationDateStatus === "select range" && (
+            <tr>
+              <td></td>
+              <td></td>
+              <td>Select Range to Brute Force</td>
+            </tr>
+          )}
           <tr>
-            <td>Genration Date</td>
+            <td>Generation Date</td>
             <td>
               <input
                 type="date"
@@ -297,11 +621,105 @@ export default function App() {
                 onChange={(e) => setGenerationDate(e.target.value)}
               />
             </td>
+            {isGoodGuy && (
+              <td>
+                {crackingGenerationDateStatus === "not started" && (
+                  <button
+                    onClick={() =>
+                      setCrackingGenerationDateStatus("select range")
+                    }
+                  >
+                    Crack
+                  </button>
+                )}
+                {crackingGenerationDateStatus === "select range" && (
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    Start
+                    <input
+                      type="date"
+                      min="2025-03-01"
+                      value={crackGenerationDateStart}
+                      onChange={(e) =>
+                        setCrackGenerationDateStart(e.target.value)
+                      }
+                    />
+                    End
+                    <input
+                      type="date"
+                      min="2025-03-02"
+                      value={crackGenerationDateEnd}
+                      onChange={(e) =>
+                        setCrackGenerationDateEnd(e.target.value)
+                      }
+                    />
+                    <button
+                      onClick={() => {
+                        if (
+                          !crackGenerationDateStart ||
+                          !crackGenerationDateEnd
+                        ) {
+                          toast.error("Please select both start and end dates")
+                          return
+                        }
+
+                        const start = new Date(crackGenerationDateStart)
+                        const end = new Date(crackGenerationDateEnd)
+
+                        if (start < end) crackGenerationDate(start, end)
+                        else toast.error("End date must be after start date")
+                      }}
+                    >
+                      Start Cracking
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCrackGenerationDateStart("")
+                        setCrackGenerationDateEnd("")
+                        setCrackingGenerationDateStatus("not started")
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+                {crackingGenerationDateStatus === "cracking" && (
+                  <>
+                    <div
+                      style={{
+                        gap: "6px",
+                        display: "flex",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Loading />
+                      <span>Cracking with {crackingGenerationDateRange}</span>
+                    </div>
+                  </>
+                )}
+                {crackingGenerationDateStatus === "not found" && (
+                  <>
+                    <span>No Generation Date found in range</span>
+                    {crackGenerationDateAgain}
+                  </>
+                )}
+                {crackingGenerationDateStatus === "cracked" && (
+                  <span>
+                    Cracked Generation Date is {crackedGenerationDate}
+                  </span>
+                )}
+                {crackingGenerationDateStatus === "error" && (
+                  <>
+                    <span>Error while cracking Generation Date</span>
+                    {crackGenerationDateAgain}
+                  </>
+                )}
+              </td>
+            )}
           </tr>
           <tr>
             <td colSpan={2}>
               <button
-                onClick={() => setStep(0)}
+                onClick={scanAgain}
                 style={{ width: "-webkit-fill-available" }}
               >
                 Scan Again
@@ -325,13 +743,20 @@ export default function App() {
                     return
                   }
 
-                  const genDate = DateTime.fromISO(generationDate)
+                  if (!generationDate) {
+                    toast.error("Please select Generation Date")
+                    return
+                  }
+
+                  const dateToCrack = DateTime.fromISO(generationDate, {
+                    zone: "Asia/Karachi",
+                  })
 
                   const { data: timeValues, error: timeRangeError } =
                     nadraDigitalId.timeRange({
                       bounds: {
-                        start: genDate.toJSDate(),
-                        end: genDate.plus({ days: 1 }).toJSDate(),
+                        start: dateToCrack.toJSDate(),
+                        end: dateToCrack.endOf("day").toJSDate(),
                       },
                     })
 
@@ -339,6 +764,8 @@ export default function App() {
                     toast.error("Failed to calculate time range")
                     return
                   }
+
+                  console.log("Time Range", timeValues)
 
                   setStep(2)
 

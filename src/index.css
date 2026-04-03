@@ -23,7 +23,39 @@ table {
   0% {
     top: 0
   }
+
   100% {
     top: calc(100% - 3px)
   }
+}
+
+.loading {
+  width: 18px;
+  height: 18px;
+  animation: loading 0.75s linear infinite;
+}
+
+@keyframes loading {
+  0% {
+    transform: rotate(0deg)
+  }
+
+  100% {
+    transform: rotate(360deg)
+  }
+}
+
+.loading > :first-child {
+  fill: none;
+  opacity: 0.2;
+  stroke-width: 4;
+  stroke: currentColor;
+}
+
+.loading > :last-child {
+  fill: none;
+  stroke-width: 4;
+  stroke: currentColor;
+  stroke-dasharray: 80;
+  stroke-dashoffset: 60;
 }
