@@ -360,7 +360,7 @@ export default function App() {
                             pin,
                             time,
                           )
-                          if (r.data) date = new Date(r.data)
+                          if (r.data) date = new Date(r.data + "Z")
                           break
                         } catch (e) {}
                       }
@@ -372,7 +372,8 @@ export default function App() {
                       return
                     }
 
-                    console.log({ vc, date })
+                    console.log("Decrypted VC", vc)
+                    console.log("Decrypted Date", date)
 
                     const { error: verificationError } =
                       await nadraDigitalId.verify(vc)
@@ -424,7 +425,7 @@ export default function App() {
             return
           }
 
-          console.log(decodedObject)
+          console.log("Decoded Data", decodedObject)
 
           if ("credentialSubject" in decodedObject) {
             const { error: verificationError } =

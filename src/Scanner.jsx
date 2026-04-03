@@ -133,16 +133,15 @@ export default function Scanner({
 
     workerRef.current = new Worker()
 
-    workerRef.current.onmessage = (e) => onScan(e.data)
+    workerRef.current.onmessage = (e) => {
+      console.log("Detected Barcodes", e.data)
+      onScan(e.data)
+    }
 
     const intervalId = setInterval(async () => {
       if (videoRef.current && videoRef.current.readyState === 4 && !disabled) {
-        try {
-          const bitmap = await createImageBitmap(videoRef.current)
-          workerRef.current.postMessage(bitmap, [bitmap])
-        } catch (e) {
-          console.log(e)
-        }
+        const bitmap = await createImageBitmap(videoRef.current)
+        workerRef.current.postMessage(bitmap, [bitmap])
       }
     }, scanDelay)
 
@@ -286,6 +285,21 @@ export default function Scanner({
             aspectRatio: aspectRatio.toFraction(),
           }}
           onClick={() => setStats((s) => !s)}
+          onDrop={async (e) => {
+            e.preventDefault()
+            const files = Array.from(e.dataTransfer.files)
+            console.log("Dropped Files", files)
+
+            const imageFiles = files.filter((f) => f.type.startsWith("image/"))
+            console.log("Dropped Image Files", imageFiles)
+
+            const bitmapImages = await Promise.all(
+              imageFiles.map((imageFile) => createImageBitmap(imageFile)),
+            )
+
+            workerRef.current.postMessage(bitmapImages, bitmapImages)
+          }}
+          onDragOver={(e) => e.preventDefault()}
         >
           <div
             className="whitespace-nowrap"

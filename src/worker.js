@@ -9,15 +9,26 @@ prepareZXingModule({
 
 const detector = new BarcodeDetector({ formats: ["qr_code"] })
 
+const isValidBitmap = (bitmap) => bitmap instanceof ImageBitmap
+
 self.onmessage = async (event) => {
-  const bitmap = event.data
+  const data = event.data
+  const bitmaps = Array.isArray(data) ? data : [data]
 
   try {
-    const codes = await detector.detect(bitmap)
-    if (codes.length > 0) self.postMessage(codes)
+    const result = []
+    for (let i = 0; i < bitmaps.length; i++) {
+      const bitmap = bitmaps[i]
+      if (!isValidBitmap(bitmap)) continue
+      const barCodes = await detector.detect(bitmap)
+      for (const barCode of barCodes) {
+        barCode.imageIndex = i
+        result.push(barCode)
+      }
+      bitmap.close()
+    }
+    if (result.length > 0) self.postMessage(result)
   } catch (e) {
     console.log(e)
   }
-
-  bitmap.close()
 }
