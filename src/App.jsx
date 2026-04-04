@@ -202,7 +202,7 @@ export default function App() {
             nadraDigitalId.sha256(pinToCrack)
 
           if (possiblePinHashError) {
-            console.log("Error while cracking PIN:", possiblePinHashError)
+            console.log("Error while hashing PIN:", possiblePinHashError)
             error = true
             break main
           }
@@ -292,11 +292,12 @@ export default function App() {
         if (crackingGenerationDateStatusRef.current !== "cracking") return
 
         const result = nadraDigitalId.decrypt(vc, pin, time)
+
         if (result.data) {
           try {
             JSON.parse(result.data)
             crackedDate = time
-            break
+            break main
           } catch (e) {}
         }
       }
