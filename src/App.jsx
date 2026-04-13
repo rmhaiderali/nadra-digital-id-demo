@@ -323,6 +323,62 @@ export default function App() {
     setCrackingGenerationDateStatus("not found")
   }
 
+  if (step === 4) {
+    return (
+      <div className="whitespace-nowrap">
+        <table>
+          <tbody>
+            <tr>
+              <td>
+                <button
+                  onClick={scanAgain}
+                  style={{ width: "-webkit-fill-available" }}
+                >
+                  Scan Again
+                </button>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(
+                      JSON.stringify(decryptedData, null, 2),
+                    )
+                    toast.success("Decrypted JSON Copied to Clipboard")
+                  }}
+                  style={{ width: "-webkit-fill-available" }}
+                >
+                  Copy as JSON
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3 style={{ marginBottom: "8px" }}>Document Data:</h3>
+        <table>
+          <tbody>
+            {Object.entries(decryptedData).map(([label, value]) => (
+              <tr key={label}>
+                <td>
+                  <strong>{label}:</strong>
+                </td>
+                <td>{value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <h3 style={{ marginBottom: "8px" }}>
+          🪪 This document does not support Digital ID
+          <br />
+          ⚠️ And contains non-locally verifiable data
+        </h3>
+      </div>
+    )
+  }
+
   if (step === 3) {
     return (
       <div className="whitespace-nowrap">
@@ -349,7 +405,7 @@ export default function App() {
                   }}
                   style={{ width: "-webkit-fill-available" }}
                 >
-                  Copy Decrypted JSON
+                  Copy as JSON
                 </button>
               </td>
             </tr>
@@ -830,7 +886,57 @@ export default function App() {
         currentDeviceIndex={currentDeviceIndex}
         setCurrentDeviceIndex={setCurrentDeviceIndex}
         onScan={async (detectedCodes) => {
-          const data = detectedCodes[0]?.rawValue
+          const format = detectedCodes[0]?.format
+          const data = detectedCodes[0]?.rawValue || ""
+
+          if (format === "pdf417") {
+            const decoded = data
+              .trim()
+              .replace(/(.)\x06/g, (m, g) => {
+                const code = g.charCodeAt(0)
+                if (code === 0x0c) return "،"
+                return String.fromCharCode(0x0600 + code)
+              })
+              .split(/[\r\n]+/)
+
+            setDecryptedData(
+              decoded.length === 8
+                ? {
+                    Name: decoded[4],
+                    "Father/Husband Name": decoded[5],
+                    "Identity Number": decoded[1],
+                    "Family Number": decoded[2],
+                    "Date of Birth": decoded[3],
+                    "Address Line 1": decoded[6],
+                    "Address Line 2": decoded[7],
+                    "Unknown Field": decoded[0],
+                  }
+                : {
+                    Name: decoded[5],
+                    "Father/Husband Name": decoded[6],
+                    "Identity Number": decoded[2],
+                    "Family Number": decoded[3],
+                    "Date of Birth": decoded[4],
+                    "Address Line 1": decoded[7],
+                    "Address Line 2": decoded[8],
+                    "Unknown Field 1": decoded[0],
+                    "Unknown Field 2": decoded[1],
+                  },
+            )
+
+            setStep(4)
+            return
+          }
+
+          if (/^\d+$/.test(data) && data.length > 14) {
+            setDecryptedData({
+              "Identity Number": data.slice(-14, -1),
+              "Card Serial Number": data.slice(0, -14),
+            })
+
+            setStep(4)
+            return
+          }
 
           const { data: decoded, error: decodeError } =
             nadraDigitalId.decode(data)

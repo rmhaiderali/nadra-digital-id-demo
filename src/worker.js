@@ -7,7 +7,7 @@ prepareZXingModule({
   overrides: { locateFile: (path, prefix) => filePaths[path] ?? path + prefix },
 })
 
-const detector = new BarcodeDetector({ formats: ["qr_code"] })
+const detector = new BarcodeDetector({ formats: ["qr_code", "pdf417"] })
 
 const isValidBitmap = (bitmap) => bitmap instanceof ImageBitmap
 
