@@ -59,3 +59,8 @@ table {
   stroke-dasharray: 80;
   stroke-dashoffset: 60;
 }
+
+.urdu {
+  direction: rtl;
+  text-align: end;
+}

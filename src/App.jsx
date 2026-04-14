@@ -364,7 +364,20 @@ export default function App() {
                 <td>
                   <strong>{label}:</strong>
                 </td>
-                <td>{value}</td>
+                <td
+                  className={
+                    [
+                      "Name",
+                      "Father/Husband Name",
+                      "Address Line 1",
+                      "Address Line 2",
+                    ].includes(label)
+                      ? "urdu"
+                      : ""
+                  }
+                >
+                  {value}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -565,7 +578,16 @@ export default function App() {
                   <td>
                     <strong>{f.label}:</strong>
                   </td>
-                  <td>
+                  <td
+                    className={
+                      /urdu/i.test(f.label) ||
+                      ["Temporary Address", "Permanent Address"].includes(
+                        f.label,
+                      )
+                        ? "urdu"
+                        : ""
+                    }
+                  >
                     {nadraDigitalId.normalizeText(f.value).data || f.value}
                   </td>
                 </tr>
