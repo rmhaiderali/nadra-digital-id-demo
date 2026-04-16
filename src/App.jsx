@@ -376,7 +376,7 @@ export default function App() {
                       : ""
                   }
                 >
-                  {value}
+                  {nadraDigitalId.normalizeText(value).data || value}
                 </td>
               </tr>
             ))}
