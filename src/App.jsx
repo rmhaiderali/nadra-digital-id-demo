@@ -921,29 +921,37 @@ export default function App() {
               })
               .split(/[\r\n]+/)
 
+            function cleanObject(initial = {}) {
+              return Object.fromEntries(
+                Object.entries(initial).filter(([, v]) => v !== undefined),
+              )
+            }
+
             setDecryptedData(
-              decoded.length === 8
-                ? {
-                    Name: decoded[4],
-                    "Father/Husband Name": decoded[5],
-                    "Identity Number": decoded[1],
-                    "Family Number": decoded[2],
-                    "Date of Birth": decoded[3],
-                    "Address Line 1": decoded[6],
-                    "Address Line 2": decoded[7],
-                    "Unknown Field": decoded[0],
-                  }
-                : {
-                    Name: decoded[5],
-                    "Father/Husband Name": decoded[6],
-                    "Identity Number": decoded[2],
-                    "Family Number": decoded[3],
-                    "Date of Birth": decoded[4],
-                    "Address Line 1": decoded[7],
-                    "Address Line 2": decoded[8],
-                    "Unknown Field 1": decoded[0],
-                    "Unknown Field 2": decoded[1],
-                  },
+              cleanObject(
+                decoded[2].length === 6
+                  ? {
+                      Name: decoded[4],
+                      "Father/Husband Name": decoded[5],
+                      "Identity Number": decoded[1],
+                      "Family Number": decoded[2],
+                      "Date of Birth": decoded[3],
+                      "Address Line 1": decoded[6],
+                      "Address Line 2": decoded[7],
+                      "Unknown Field": decoded[0],
+                    }
+                  : {
+                      Name: decoded[5],
+                      "Father/Husband Name": decoded[6],
+                      "Identity Number": decoded[2],
+                      "Family Number": decoded[3],
+                      "Date of Birth": decoded[4],
+                      "Address Line 1": decoded[7],
+                      "Address Line 2": decoded[8],
+                      "Unknown Field 1": decoded[0],
+                      "Unknown Field 2": decoded[1],
+                    },
+              ),
             )
 
             setStep(4)
