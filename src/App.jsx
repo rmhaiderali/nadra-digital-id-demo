@@ -933,17 +933,17 @@ export default function App() {
                   ? {
                       Name: decoded[4],
                       "Father/Husband Name": decoded[5],
-                      "Identity Number": decoded[1],
+                      "Identity Number": decoded[1]?.slice(0, 13),
                       "Family Number": decoded[2],
                       "Date of Birth": decoded[3],
                       "Address Line 1": decoded[6],
                       "Address Line 2": decoded[7],
-                      "Unknown Field": decoded[0],
+                      "Unknown Field 1": decoded[0],
                     }
                   : {
                       Name: decoded[5],
                       "Father/Husband Name": decoded[6],
-                      "Identity Number": decoded[2],
+                      "Identity Number": decoded[2]?.slice(0, 13),
                       "Family Number": decoded[3],
                       "Date of Birth": decoded[4],
                       "Address Line 1": decoded[7],
