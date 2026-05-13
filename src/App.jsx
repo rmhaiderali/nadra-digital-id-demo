@@ -958,7 +958,7 @@ export default function App() {
             return
           }
 
-          if (/^\d+$/.test(data) && data.length > 14) {
+          if (/^\d+$/.test(data) && data.length > 25 && data.length < 30) {
             setDecryptedData({
               "Identity Number": data.slice(-14, -1),
               "Card Serial Number": data.slice(0, -14),
