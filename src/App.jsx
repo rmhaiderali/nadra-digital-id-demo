@@ -149,6 +149,314 @@ export default function App() {
     setCrackGenerationDateEnd("")
   }
 
+  const scanAgainButton = (
+    <button onClick={scanAgain} style={{ width: "-webkit-fill-available" }}>
+      Scan Again
+    </button>
+  )
+
+  function copyAsJson() {
+    navigator.clipboard.writeText(JSON.stringify(decryptedData, null, 2))
+    toast.success("Decrypted JSON Copied to Clipboard")
+  }
+
+  const copyAsJsonButton = (
+    <button onClick={copyAsJson} style={{ width: "-webkit-fill-available" }}>
+      Copy as JSON
+    </button>
+  )
+
+  if (step === 4) {
+    return (
+      <div className="whitespace-nowrap">
+        <table>
+          <tbody>
+            <tr>
+              <td>{scanAgainButton}</td>
+            </tr>
+            <tr>
+              <td>{copyAsJsonButton}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3 style={{ marginBottom: "8px" }}>Document Data:</h3>
+        <table>
+          <tbody>
+            {Object.entries(decryptedData).map(([label, value]) => (
+              <tr key={label}>
+                <td>
+                  <strong>{label}:</strong>
+                </td>
+                <td
+                  className={
+                    [
+                      "Name",
+                      "Father/Husband Name",
+                      "Address Line 1",
+                      "Address Line 2",
+                    ].includes(label)
+                      ? "urdu"
+                      : ""
+                  }
+                >
+                  {nadraDigitalId.normalizeText(value).data || value}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <h3 style={{ marginBottom: "8px" }}>
+          🟡 Document does not support local authenticity verification
+        </h3>
+      </div>
+    )
+  }
+
+  const toggleHourCycleButton = (
+    <button
+      style={{ width: "-webkit-fill-available" }}
+      onClick={() => setIs12HourCycle(!is12HourCycle)}
+    >
+      Use {is12HourCycle ? "24h" : "12h"} Time Format
+    </button>
+  )
+
+  const downloadQRCodeButton = (
+    <button
+      style={{ width: "-webkit-fill-available" }}
+      onClick={async () => {
+        // const pin = "0000"
+        // const date = new Date()
+        // const { proof, ...vc } = JSON.parse(JSON.stringify(decryptedData))
+
+        // date.setHours(0, 0, 0, 0)
+
+        // const { data: signature, error: signingError } =
+        //   await nadraDigitalId.sign(vc)
+
+        // if (signingError) {
+        //   toast.error("Failed to sign vc")
+        //   return
+        // }
+
+        // const signedVC = { ...vc, proof: { ...proof, jws: signature } }
+
+        // const { data: encryptedData, error: encryptDataError } =
+        //   nadraDigitalId.encrypt(JSON.stringify(signedVC), pin, date)
+
+        // if (encryptDataError) {
+        //   toast.error("Failed to encrypt vc")
+        //   return
+        // }
+
+        // const { data: encryptedDate, error: encryptDateError } =
+        //   nadraDigitalId.encrypt(
+        //     DateTime.fromJSDate(date).toFormat("yyyy-MM-dd HH:mm:ss"),
+        //     pin,
+        //     date,
+        //   )
+
+        // if (encryptDateError) {
+        //   toast.error("Failed to encrypt date")
+        //   return
+        // }
+
+        // const objectToEncode = {
+        //   v: "1.0ce",
+        //   hash: nadraDigitalId.sha256(pin).data,
+        //   date: encryptedDate,
+        //   vc: encryptedData,
+        //   fields: [-1],
+        // }
+
+        // const jsonString = JSON.stringify(objectToEncode)
+
+        const jsonString = JSON.stringify(decryptedData)
+
+        const { data: encodedData, error: encodeError } =
+          nadraDigitalId.encode(jsonString)
+
+        if (encodeError) {
+          toast.error("Failed to encode data")
+          return
+        }
+
+        // download QR code as an image
+
+        const options = { format: "QRCode", scale: 4, options: "dataMask=2" }
+
+        const { error, image } = await writeBarcode(encodedData, options)
+
+        if (error) {
+          toast.error("Failed to generate QR code")
+          console.log(error)
+          return
+        }
+
+        downloadBlob(image, "nadra-digital-id-qr-code.png")
+      }}
+    >
+      Download QR Code
+    </button>
+  )
+
+  if (step === 3) {
+    return (
+      <div className="whitespace-nowrap">
+        <table>
+          <tbody>
+            <tr>
+              <td>{scanAgainButton}</td>
+            </tr>
+            <tr>
+              <td>{copyAsJsonButton}</td>
+            </tr>
+            <tr>
+              <td>{toggleHourCycleButton}</td>
+            </tr>
+            <tr>
+              <td>{downloadQRCodeButton}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3 style={{ marginBottom: "8px" }}>QR Code Metadata:</h3>
+        <table>
+          <tbody>
+            {decryptedData.id && (
+              <tr>
+                <td>
+                  <strong>ID:</strong>
+                </td>
+                <td>{decryptedData.id}</td>
+              </tr>
+            )}
+            {[""].map(() => {
+              const type = decryptedData.type
+                ?.toString()
+                .split(",")
+                .filter((t) => t !== "VerifiableCredential")
+
+              if (!type || type.length === 0) return null
+
+              return (
+                <tr key="type">
+                  <td>
+                    <strong>Type:</strong>
+                  </td>
+                  <td>{type.join(", ")}</td>
+                </tr>
+              )
+            })}
+            {decryptedData.issuer && (
+              <tr>
+                <td>
+                  <strong>Issuer:</strong>
+                </td>
+                <td>{decryptedData.issuer}</td>
+              </tr>
+            )}
+            {decryptedData.issuanceDate && (
+              <tr>
+                <td>
+                  <strong>Issuance Date:</strong>
+                </td>
+                <td>
+                  {DateTime.fromISO(decryptedData.issuanceDate).toFormat(
+                    superiorDateFormat +
+                      (is12HourCycle ? " hh:mm a" : " HH:mm"),
+                  )}
+                </td>
+              </tr>
+            )}
+            {decryptedData.expirationDate && (
+              <tr>
+                <td>
+                  <strong>Expiration Date:</strong>
+                </td>
+                <td>
+                  {DateTime.fromISO(decryptedData.expirationDate).toFormat(
+                    superiorDateFormat +
+                      (is12HourCycle ? " hh:mm a" : " HH:mm"),
+                  )}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        <h3 style={{ marginBottom: "8px" }}>Document Data:</h3>
+        <table>
+          <tbody>
+            {(() => {
+              const fields = Object.values(decryptedData.credentialSubject)
+
+              const filteredFields =
+                fullAccess ||
+                !decodedData.fields?.length ||
+                decodedData.fields.includes(-1)
+                  ? fields
+                  : fields.filter((v, i) => decodedData.fields.includes(i))
+
+              return filteredFields
+                .filter((f) => f?.label && f?.value)
+                .map((f) => (
+                  <tr key={f.label}>
+                    <td>
+                      <strong>{f.label}:</strong>
+                    </td>
+                    <td
+                      className={
+                        /urdu/i.test(f.label) ||
+                        ["Temporary Address", "Permanent Address"].includes(
+                          f.label,
+                        )
+                          ? "urdu"
+                          : ""
+                      }
+                    >
+                      {nadraDigitalId.normalizeText(f.value).data || f.value}
+                    </td>
+                  </tr>
+                ))
+            })()}
+          </tbody>
+        </table>
+
+        <h3 style={{ marginBottom: "8px" }}>
+          {isDocumentVerified
+            ? "🟢 Document passed authenticity verification"
+            : "🔴 Document did not pass authenticity verification"}
+        </h3>
+      </div>
+    )
+  }
+
+  if (step === 2) {
+    return <div>Decrypting Please Wait</div>
+  }
+
+  const crackPinAgain = (
+    <button onClick={crackPin} style={{ marginLeft: "4px" }}>
+      Crack Again
+    </button>
+  )
+
+  const crackGenerationDateAgain = (
+    <button
+      onClick={() => {
+        setCrackGenerationDateStart("")
+        setCrackGenerationDateEnd("")
+        setCrackingGenerationDateStatus("select range")
+      }}
+      style={{ marginLeft: "4px" }}
+    >
+      Crack Again
+    </button>
+  )
+
   function getCurrentDataHashFunction() {
     const hashFunctionByVersion = {
       "1.0ce": { fn: nadraDigitalId.sha256, name: "sha256", hexLength: 64 },
@@ -343,318 +651,81 @@ export default function App() {
     setCrackingGenerationDateStatus("not found")
   }
 
-  const scanAgainButton = (
-    <button onClick={scanAgain} style={{ width: "-webkit-fill-available" }}>
-      Scan Again
-    </button>
-  )
+  function decrypt() {
+    const currentDataHashFunction = getCurrentDataHashFunction()
+    if (!currentDataHashFunction) return
 
-  function copyAsJson() {
-    navigator.clipboard.writeText(JSON.stringify(decryptedData, null, 2))
-    toast.success("Decrypted JSON Copied to Clipboard")
+    const { data: pinHash, error: pinHashError } =
+      currentDataHashFunction.fn(pin)
+
+    if (pinHashError) {
+      toast.error("Failed to hash PIN")
+      return
+    }
+
+    if (decodedData.hash !== pinHash) {
+      toast.error("Wrong PIN")
+      return
+    }
+
+    if (!generationDate) {
+      toast.error("Please select Generation Date")
+      return
+    }
+
+    const dateToCrack = DateTime.fromISO(generationDate, {
+      zone: "Asia/Karachi",
+    })
+
+    const { data: timeValues, error: timeRangeError } =
+      nadraDigitalId.timeRange({
+        bounds: {
+          start: dateToCrack.toJSDate(),
+          end: dateToCrack.endOf("day").toJSDate(),
+        },
+      })
+
+    if (timeRangeError) {
+      toast.error("Failed to calculate time range")
+      return
+    }
+
+    console.log("Time Range", timeValues)
+
+    setStep(2)
+
+    setTimeout(async () => {
+      let vc = null
+      let date = null
+
+      for (const time of timeValues) {
+        const result = nadraDigitalId.decrypt(decodedData.vc, pin, time)
+        if (result.data) {
+          try {
+            vc = JSON.parse(result.data)
+            const r = nadraDigitalId.decrypt(decodedData.date, pin, time)
+            if (r.data) date = new Date(r.data + "Z")
+            break
+          } catch (e) {}
+        }
+      }
+
+      if (!vc) {
+        setStep(1)
+        toast.error("Wrong Generation Date")
+        return
+      }
+
+      console.log("Decrypted VC", vc)
+      console.log("Decrypted Date", date)
+
+      const { error: verificationError } = await nadraDigitalId.verify(vc)
+
+      setIsDocumentVerified(!verificationError)
+      setDecryptedData(vc)
+      setStep(3)
+    }, 100)
   }
-
-  const copyAsJsonButton = (
-    <button onClick={copyAsJson} style={{ width: "-webkit-fill-available" }}>
-      Copy as JSON
-    </button>
-  )
-
-  if (step === 4) {
-    return (
-      <div className="whitespace-nowrap">
-        <table>
-          <tbody>
-            <tr>
-              <td>{scanAgainButton}</td>
-            </tr>
-            <tr>
-              <td>{copyAsJsonButton}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <h3 style={{ marginBottom: "8px" }}>Document Data:</h3>
-        <table>
-          <tbody>
-            {Object.entries(decryptedData).map(([label, value]) => (
-              <tr key={label}>
-                <td>
-                  <strong>{label}:</strong>
-                </td>
-                <td
-                  className={
-                    [
-                      "Name",
-                      "Father/Husband Name",
-                      "Address Line 1",
-                      "Address Line 2",
-                    ].includes(label)
-                      ? "urdu"
-                      : ""
-                  }
-                >
-                  {nadraDigitalId.normalizeText(value).data || value}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <h3 style={{ marginBottom: "8px" }}>
-          🟡 Document does not support local verification
-        </h3>
-      </div>
-    )
-  }
-
-  const toggleHourCycleButton = (
-    <button
-      style={{ width: "-webkit-fill-available" }}
-      onClick={() => setIs12HourCycle(!is12HourCycle)}
-    >
-      Use {is12HourCycle ? "24h" : "12h"} Time Format
-    </button>
-  )
-
-  if (step === 3) {
-    return (
-      <div className="whitespace-nowrap">
-        <table>
-          <tbody>
-            <tr>
-              <td>{scanAgainButton}</td>
-            </tr>
-            <tr>
-              <td>{copyAsJsonButton}</td>
-            </tr>
-            <tr>
-              <td>{toggleHourCycleButton}</td>
-            </tr>
-            <tr>
-              <td>
-                <button
-                  style={{ width: "-webkit-fill-available" }}
-                  onClick={async () => {
-                    // const pin = "0000"
-                    // const date = new Date()
-                    // const { proof, ...vc } = JSON.parse(JSON.stringify(decryptedData))
-
-                    // date.setHours(0, 0, 0, 0)
-
-                    // const { data: signature, error: signingError } =
-                    //   await nadraDigitalId.sign(vc)
-
-                    // if (signingError) {
-                    //   toast.error("Failed to sign vc")
-                    //   return
-                    // }
-
-                    // const signedVC = { ...vc, proof: { ...proof, jws: signature } }
-
-                    // const { data: encryptedData, error: encryptDataError } =
-                    //   nadraDigitalId.encrypt(JSON.stringify(signedVC), pin, date)
-
-                    // if (encryptDataError) {
-                    //   toast.error("Failed to encrypt vc")
-                    //   return
-                    // }
-
-                    // const { data: encryptedDate, error: encryptDateError } =
-                    //   nadraDigitalId.encrypt(
-                    //     DateTime.fromJSDate(date).toFormat("yyyy-MM-dd HH:mm:ss"),
-                    //     pin,
-                    //     date,
-                    //   )
-
-                    // if (encryptDateError) {
-                    //   toast.error("Failed to encrypt date")
-                    //   return
-                    // }
-
-                    // const objectToEncode = {
-                    //   v: "1.0ce",
-                    //   hash: nadraDigitalId.sha256(pin).data,
-                    //   date: encryptedDate,
-                    //   vc: encryptedData,
-                    //   fields: [-1],
-                    // }
-
-                    // const jsonString = JSON.stringify(objectToEncode)
-
-                    const jsonString = JSON.stringify(decryptedData)
-
-                    const { data: encodedData, error: encodeError } =
-                      nadraDigitalId.encode(jsonString)
-
-                    if (encodeError) {
-                      toast.error("Failed to encode data")
-                      return
-                    }
-
-                    // download QR code as an image
-
-                    const options = {
-                      format: "QRCode",
-                      scale: 4,
-                      options: "dataMask=2",
-                    }
-
-                    const { error, image } = await writeBarcode(
-                      encodedData,
-                      options,
-                    )
-
-                    if (error) {
-                      toast.error("Failed to generate QR code")
-                      console.log(error)
-                      return
-                    }
-
-                    downloadBlob(image, "nadra-digital-id-qr-code.png")
-                  }}
-                >
-                  Download QR Code
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <h3 style={{ marginBottom: "8px" }}>QR Code Metadata:</h3>
-        <table>
-          <tbody>
-            {decryptedData.id && (
-              <tr>
-                <td>
-                  <strong>ID:</strong>
-                </td>
-                <td>{decryptedData.id}</td>
-              </tr>
-            )}
-            {[""].map(() => {
-              const type = decryptedData.type
-                ?.toString()
-                .split(",")
-                .filter((t) => t !== "VerifiableCredential")
-
-              if (!type || type.length === 0) return null
-
-              return (
-                <tr key="type">
-                  <td>
-                    <strong>Type:</strong>
-                  </td>
-                  <td>{type.join(", ")}</td>
-                </tr>
-              )
-            })}
-            {decryptedData.issuer && (
-              <tr>
-                <td>
-                  <strong>Issuer:</strong>
-                </td>
-                <td>{decryptedData.issuer}</td>
-              </tr>
-            )}
-            {decryptedData.issuanceDate && (
-              <tr>
-                <td>
-                  <strong>Issuance Date:</strong>
-                </td>
-                <td>
-                  {DateTime.fromISO(decryptedData.issuanceDate).toFormat(
-                    superiorDateFormat +
-                      (is12HourCycle ? " hh:mm a" : " HH:mm"),
-                  )}
-                </td>
-              </tr>
-            )}
-            {decryptedData.expirationDate && (
-              <tr>
-                <td>
-                  <strong>Expiration Date:</strong>
-                </td>
-                <td>
-                  {DateTime.fromISO(decryptedData.expirationDate).toFormat(
-                    superiorDateFormat +
-                      (is12HourCycle ? " hh:mm a" : " HH:mm"),
-                  )}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-
-        <h3 style={{ marginBottom: "8px" }}>Document Data:</h3>
-        <table>
-          <tbody>
-            {(() => {
-              const fields = Object.values(decryptedData.credentialSubject)
-
-              const filteredFields =
-                fullAccess ||
-                !decodedData.fields?.length ||
-                decodedData.fields.includes(-1)
-                  ? fields
-                  : fields.filter((v, i) => decodedData.fields.includes(i))
-
-              return filteredFields
-                .filter((f) => f?.label && f?.value)
-                .map((f) => (
-                  <tr key={f.label}>
-                    <td>
-                      <strong>{f.label}:</strong>
-                    </td>
-                    <td
-                      className={
-                        /urdu/i.test(f.label) ||
-                        ["Temporary Address", "Permanent Address"].includes(
-                          f.label,
-                        )
-                          ? "urdu"
-                          : ""
-                      }
-                    >
-                      {nadraDigitalId.normalizeText(f.value).data || f.value}
-                    </td>
-                  </tr>
-                ))
-            })()}
-          </tbody>
-        </table>
-
-        <h3 style={{ marginBottom: "8px" }}>
-          {isDocumentVerified
-            ? "🟢 Document passed authenticity verification"
-            : "🔴 Document did not pass authenticity verification"}
-        </h3>
-      </div>
-    )
-  }
-
-  if (step === 2) {
-    return <div>Decrypting Please Wait</div>
-  }
-
-  const crackPinAgain = (
-    <button onClick={crackPin} style={{ marginLeft: "4px" }}>
-      Crack Again
-    </button>
-  )
-
-  const crackGenerationDateAgain = (
-    <button
-      onClick={() => {
-        setCrackGenerationDateStart("")
-        setCrackGenerationDateEnd("")
-        setCrackingGenerationDateStatus("select range")
-      }}
-      style={{ marginLeft: "4px" }}
-    >
-      Crack Again
-    </button>
-  )
 
   if (step === 1) {
     return (
@@ -827,90 +898,7 @@ export default function App() {
           <tr>
             <td colSpan={2}>
               <button
-                onClick={() => {
-                  const currentDataHashFunction = getCurrentDataHashFunction()
-                  if (!currentDataHashFunction) return
-
-                  const { data: pinHash, error: pinHashError } =
-                    currentDataHashFunction.fn(pin)
-
-                  if (pinHashError) {
-                    toast.error("Failed to hash PIN")
-                    return
-                  }
-
-                  if (decodedData.hash !== pinHash) {
-                    toast.error("Wrong PIN")
-                    return
-                  }
-
-                  if (!generationDate) {
-                    toast.error("Please select Generation Date")
-                    return
-                  }
-
-                  const dateToCrack = DateTime.fromISO(generationDate, {
-                    zone: "Asia/Karachi",
-                  })
-
-                  const { data: timeValues, error: timeRangeError } =
-                    nadraDigitalId.timeRange({
-                      bounds: {
-                        start: dateToCrack.toJSDate(),
-                        end: dateToCrack.endOf("day").toJSDate(),
-                      },
-                    })
-
-                  if (timeRangeError) {
-                    toast.error("Failed to calculate time range")
-                    return
-                  }
-
-                  console.log("Time Range", timeValues)
-
-                  setStep(2)
-
-                  setTimeout(async () => {
-                    let vc = null
-                    let date = null
-
-                    for (const time of timeValues) {
-                      const result = nadraDigitalId.decrypt(
-                        decodedData.vc,
-                        pin,
-                        time,
-                      )
-                      if (result.data) {
-                        try {
-                          vc = JSON.parse(result.data)
-                          const r = nadraDigitalId.decrypt(
-                            decodedData.date,
-                            pin,
-                            time,
-                          )
-                          if (r.data) date = new Date(r.data + "Z")
-                          break
-                        } catch (e) {}
-                      }
-                    }
-
-                    if (!vc) {
-                      setStep(1)
-                      toast.error("Wrong Generation Date")
-                      return
-                    }
-
-                    console.log("Decrypted VC", vc)
-                    console.log("Decrypted Date", date)
-
-                    const { error: verificationError } =
-                      await nadraDigitalId.verify(vc)
-
-                    setIsDocumentVerified(!verificationError)
-                    setDecryptedData(vc)
-                    setStep(3)
-                  }, 100)
-                }}
+                onClick={decrypt}
                 style={{ width: "-webkit-fill-available" }}
               >
                 Decrypt
