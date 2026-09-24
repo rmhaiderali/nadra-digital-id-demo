@@ -60,16 +60,6 @@ function isValidBase64(str) {
   }
 }
 
-async function downloadQRCode(data, filename) {
-  const options = { format: "QRCode", scale: 4 }
-  const { error, image } = await writeBarcode(data, options)
-  if (error) {
-    toast.error("Failed to generate QR code")
-    return
-  }
-  downloadBlob(image, filename)
-}
-
 const dateDelimiter =
   new Date().toLocaleDateString().match(/[\-|\/|\.|]/)?.[0] || "/"
 
@@ -85,34 +75,32 @@ function unixDayToDate(unixDay) {
 
 const superiorDateFormat = "yyyy" + dateDelimiter + "MM" + dateDelimiter + "dd"
 
-window.iamagoodguy = () => {
-  localStorage.setItem("goodguy", "true")
-  toast.success("Yes, you are a good guy! 😇")
+window.fullAccess = () => {
+  localStorage.setItem("fullAccess", "true")
+  toast.success("Granted Full Access")
   setTimeout(() => window.location.reload(), 2000)
 }
 
-const isGoodGuy = localStorage.getItem("goodguy") === "true"
+const fullAccess = localStorage.getItem("fullAccess") === "true"
 
 export default function App() {
   const [devices, setDevices] = useState(null)
   const [currentDeviceIndex, setCurrentDeviceIndex] = useState(null)
 
-  const [is12HourCycle, setIs12HourCycle] = useState(() =>
+  const [is12HourCycle, _setIs12HourCycle] = useState(() =>
     JSON.parse(localStorage.getItem("is12HourCycle") ?? "true"),
   )
 
-  function toggleHourCycle() {
-    setIs12HourCycle((prev) => {
-      const newValue = !prev
-      localStorage.setItem("is12HourCycle", newValue)
-      return newValue
-    })
+  function setIs12HourCycle(value) {
+    _setIs12HourCycle(value)
+    localStorage.setItem("is12HourCycle", value)
   }
 
-  // 0: scan
-  // 1: ask for pin and generation date
+  // 0: scaning
+  // 1: asking for PIN and generation date
   // 2: decrypting
-  // 3: show data
+  // 3: showing verifiable document data
+  // 4: showing legacy document data
   const [step, setStep] = useState(0)
 
   const [pin, setPin] = useState("")
@@ -161,6 +149,27 @@ export default function App() {
     setCrackGenerationDateEnd("")
   }
 
+  function getCurrentDataHashFunction() {
+    const hashFunctionByVersion = {
+      "1.0ce": { fn: nadraDigitalId.sha256, name: "sha256", hexLength: 64 },
+      "1.2ce": { fn: nadraDigitalId.sha384, name: "sha384", hexLength: 96 },
+    }
+
+    if (!decodedData.v) {
+      toast.error("No version number found in the QR code data.")
+      return
+    }
+
+    const currentDataHashFunction = hashFunctionByVersion[decodedData.v]
+
+    if (!currentDataHashFunction) {
+      toast.error("Unsupported encoded data version: " + decodedData.v)
+      return
+    }
+
+    return currentDataHashFunction
+  }
+
   async function crackPin() {
     setCrackingPinStatus("cracking")
 
@@ -172,9 +181,16 @@ export default function App() {
       return
     }
 
-    if (pinHash.length !== 64) {
+    const currentDataHashFunction = getCurrentDataHashFunction()
+    if (!currentDataHashFunction) return
+
+    if (pinHash.length !== currentDataHashFunction.hexLength) {
       setCrackingPinStatus("error")
-      console.log("Wrong hash length. Not valid SHA-256 hash.")
+      console.log(
+        "Wrong hash length. Not valid " +
+          currentDataHashFunction.name +
+          " hash.",
+      )
       return
     }
 
@@ -199,7 +215,7 @@ export default function App() {
 
         for (const pinToCrack of pinsToCrack) {
           const { data: possiblePinHash, error: possiblePinHashError } =
-            nadraDigitalId.sha256(pinToCrack)
+            currentDataHashFunction.fn(pinToCrack)
 
           if (possiblePinHashError) {
             console.log("Error while hashing PIN:", possiblePinHashError)
@@ -235,7 +251,11 @@ export default function App() {
   }
 
   async function crackGenerationDate(start, end) {
-    const { data: pinHash, error: pinHashError } = nadraDigitalId.sha256(pin)
+    const currentDataHashFunction = getCurrentDataHashFunction()
+    if (!currentDataHashFunction) return
+
+    const { data: pinHash, error: pinHashError } =
+      currentDataHashFunction.fn(pin)
 
     if (pinHashError) {
       toast.error("Failed to hash PIN")
@@ -323,35 +343,33 @@ export default function App() {
     setCrackingGenerationDateStatus("not found")
   }
 
+  const scanAgainButton = (
+    <button onClick={scanAgain} style={{ width: "-webkit-fill-available" }}>
+      Scan Again
+    </button>
+  )
+
+  function copyAsJson() {
+    navigator.clipboard.writeText(JSON.stringify(decryptedData, null, 2))
+    toast.success("Decrypted JSON Copied to Clipboard")
+  }
+
+  const copyAsJsonButton = (
+    <button onClick={copyAsJson} style={{ width: "-webkit-fill-available" }}>
+      Copy as JSON
+    </button>
+  )
+
   if (step === 4) {
     return (
       <div className="whitespace-nowrap">
         <table>
           <tbody>
             <tr>
-              <td>
-                <button
-                  onClick={scanAgain}
-                  style={{ width: "-webkit-fill-available" }}
-                >
-                  Scan Again
-                </button>
-              </td>
+              <td>{scanAgainButton}</td>
             </tr>
             <tr>
-              <td>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(
-                      JSON.stringify(decryptedData, null, 2),
-                    )
-                    toast.success("Decrypted JSON Copied to Clipboard")
-                  }}
-                  style={{ width: "-webkit-fill-available" }}
-                >
-                  Copy as JSON
-                </button>
-              </td>
+              <td>{copyAsJsonButton}</td>
             </tr>
           </tbody>
         </table>
@@ -384,13 +402,20 @@ export default function App() {
         </table>
 
         <h3 style={{ marginBottom: "8px" }}>
-          🪪 This document does not support Digital ID
-          <br />
-          ⚠️ And contains non-locally verifiable data
+          🟡 Document does not support local verification
         </h3>
       </div>
     )
   }
+
+  const toggleHourCycleButton = (
+    <button
+      style={{ width: "-webkit-fill-available" }}
+      onClick={() => setIs12HourCycle(!is12HourCycle)}
+    >
+      Use {is12HourCycle ? "24h" : "12h"} Time Format
+    </button>
+  )
 
   if (step === 3) {
     return (
@@ -398,39 +423,13 @@ export default function App() {
         <table>
           <tbody>
             <tr>
-              <td>
-                <button
-                  onClick={scanAgain}
-                  style={{ width: "-webkit-fill-available" }}
-                >
-                  Scan Again
-                </button>
-              </td>
+              <td>{scanAgainButton}</td>
             </tr>
             <tr>
-              <td>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(
-                      JSON.stringify(decryptedData, null, 2),
-                    )
-                    toast.success("Decrypted JSON Copied to Clipboard")
-                  }}
-                  style={{ width: "-webkit-fill-available" }}
-                >
-                  Copy as JSON
-                </button>
-              </td>
+              <td>{copyAsJsonButton}</td>
             </tr>
             <tr>
-              <td>
-                <button
-                  onClick={toggleHourCycle}
-                  style={{ width: "-webkit-fill-available" }}
-                >
-                  Use {is12HourCycle ? "24h" : "12h"} Time Format
-                </button>
-              </td>
+              <td>{toggleHourCycleButton}</td>
             </tr>
             <tr>
               <td>
@@ -493,7 +492,26 @@ export default function App() {
                       return
                     }
 
-                    downloadQRCode(encodedData, "nadra-digital-id-qr-code.png")
+                    // download QR code as an image
+
+                    const options = {
+                      format: "QRCode",
+                      scale: 4,
+                      options: "dataMask=2",
+                    }
+
+                    const { error, image } = await writeBarcode(
+                      encodedData,
+                      options,
+                    )
+
+                    if (error) {
+                      toast.error("Failed to generate QR code")
+                      console.log(error)
+                      return
+                    }
+
+                    downloadBlob(image, "nadra-digital-id-qr-code.png")
                   }}
                 >
                   Download QR Code
@@ -571,34 +589,45 @@ export default function App() {
         <h3 style={{ marginBottom: "8px" }}>Document Data:</h3>
         <table>
           <tbody>
-            {Object.values(decryptedData.credentialSubject)
-              .filter((f) => f?.label && f?.value)
-              .map((f) => (
-                <tr key={f.label}>
-                  <td>
-                    <strong>{f.label}:</strong>
-                  </td>
-                  <td
-                    className={
-                      /urdu/i.test(f.label) ||
-                      ["Temporary Address", "Permanent Address"].includes(
-                        f.label,
-                      )
-                        ? "urdu"
-                        : ""
-                    }
-                  >
-                    {nadraDigitalId.normalizeText(f.value).data || f.value}
-                  </td>
-                </tr>
-              ))}
+            {(() => {
+              const fields = Object.values(decryptedData.credentialSubject)
+
+              const filteredFields =
+                fullAccess ||
+                !decodedData.fields?.length ||
+                decodedData.fields.includes(-1)
+                  ? fields
+                  : fields.filter((v, i) => decodedData.fields.includes(i))
+
+              return filteredFields
+                .filter((f) => f?.label && f?.value)
+                .map((f) => (
+                  <tr key={f.label}>
+                    <td>
+                      <strong>{f.label}:</strong>
+                    </td>
+                    <td
+                      className={
+                        /urdu/i.test(f.label) ||
+                        ["Temporary Address", "Permanent Address"].includes(
+                          f.label,
+                        )
+                          ? "urdu"
+                          : ""
+                      }
+                    >
+                      {nadraDigitalId.normalizeText(f.value).data || f.value}
+                    </td>
+                  </tr>
+                ))
+            })()}
           </tbody>
         </table>
 
         <h3 style={{ marginBottom: "8px" }}>
           {isDocumentVerified
-            ? "✅ This document is Authentic"
-            : "⚠️ Authenticity could not be verified"}
+            ? "🟢 Document passed authenticity verification"
+            : "🔴 Document did not pass authenticity verification"}
         </h3>
       </div>
     )
@@ -643,7 +672,7 @@ export default function App() {
                 style={{ width: "-webkit-fill-available" }}
               />
             </td>
-            {isGoodGuy && (
+            {fullAccess && (
               <td>
                 {crackingPinStatus === "not started" && (
                   <button onClick={crackPin}>Crack</button>
@@ -697,7 +726,7 @@ export default function App() {
                 onChange={(e) => setGenerationDate(e.target.value)}
               />
             </td>
-            {isGoodGuy && (
+            {fullAccess && (
               <td>
                 {crackingGenerationDateStatus === "not started" && (
                   <button
@@ -793,21 +822,17 @@ export default function App() {
             )}
           </tr>
           <tr>
-            <td colSpan={2}>
-              <button
-                onClick={scanAgain}
-                style={{ width: "-webkit-fill-available" }}
-              >
-                Scan Again
-              </button>
-            </td>
+            <td colSpan={2}>{scanAgainButton}</td>
           </tr>
           <tr>
             <td colSpan={2}>
               <button
                 onClick={() => {
+                  const currentDataHashFunction = getCurrentDataHashFunction()
+                  if (!currentDataHashFunction) return
+
                   const { data: pinHash, error: pinHashError } =
-                    nadraDigitalId.sha256(pin)
+                    currentDataHashFunction.fn(pin)
 
                   if (pinHashError) {
                     toast.error("Failed to hash PIN")
@@ -972,6 +997,7 @@ export default function App() {
             nadraDigitalId.decode(data)
 
           if (decodeError) {
+            console.log(decodeError)
             toast.error(
               "Failed to decode, make sure its NADRA Digital ID QR code",
             )
