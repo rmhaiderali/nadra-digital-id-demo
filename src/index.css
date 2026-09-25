@@ -1,31 +1,31 @@
 html {
-  color-scheme: light dark
+  color-scheme: light dark;
 }
 
 body:has(.no-margin) {
-  margin: 0
+  margin: 0;
 }
 
 html,
 body {
-  width: fit-content
+  width: fit-content;
 }
 
 table {
-  border-spacing: 6px 3px
+  border-spacing: 6px 3px;
 }
 
 .whitespace-nowrap {
-  white-space: nowrap
+  white-space: nowrap;
 }
 
 @keyframes slide {
   0% {
-    top: 0
+    top: 0;
   }
 
   100% {
-    top: calc(100% - 3px)
+    top: calc(100% - 3px);
   }
 }
 
@@ -37,11 +37,11 @@ table {
 
 @keyframes loading {
   0% {
-    transform: rotate(0deg)
+    transform: rotate(0deg);
   }
 
   100% {
-    transform: rotate(360deg)
+    transform: rotate(360deg);
   }
 }
 
