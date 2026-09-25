@@ -147,6 +147,16 @@ export default function App() {
     </button>
   )
 
+  function Heading({ children }) {
+    return (
+      <tr>
+        <td>
+          <h3 style={{ margin: "12px 0 8px" }}>{children}</h3>
+        </td>
+      </tr>
+    )
+  }
+
   if (step === 4) {
     return (
       <div className="whitespace-nowrap">
@@ -161,9 +171,10 @@ export default function App() {
           </tbody>
         </table>
 
-        <h3 style={{ marginBottom: "8px" }}>Document Data:</h3>
         <table>
           <tbody>
+            <Heading>Document Data:</Heading>
+
             {Object.entries(decryptedData).map(([label, value]) => (
               <tr key={label}>
                 <td>
@@ -187,10 +198,6 @@ export default function App() {
             ))}
           </tbody>
         </table>
-
-        <h3 style={{ marginBottom: "8px" }}>
-          🟡 Document does not support local authenticity verification
-        </h3>
       </div>
     )
   }
@@ -303,9 +310,10 @@ export default function App() {
           </tbody>
         </table>
 
-        <h3 style={{ marginBottom: "8px" }}>QR Code Metadata:</h3>
         <table>
           <tbody>
+            <Heading>Metadata:</Heading>
+
             {decryptedData.id && (
               <tr>
                 <td>
@@ -363,12 +371,15 @@ export default function App() {
                 </td>
               </tr>
             )}
-          </tbody>
-        </table>
+            <tr>
+              <td>
+                <strong>Cryptographic Verification:</strong>
+              </td>
+              <td>{isDocumentVerified ? "Passed" : "Failed"}</td>
+            </tr>
 
-        <h3 style={{ marginBottom: "8px" }}>Document Data:</h3>
-        <table>
-          <tbody>
+            <Heading>Document Data:</Heading>
+
             {(() => {
               const fields = Object.values(decryptedData.credentialSubject)
 
@@ -403,12 +414,6 @@ export default function App() {
             })()}
           </tbody>
         </table>
-
-        <h3 style={{ marginBottom: "8px" }}>
-          {isDocumentVerified
-            ? "🟢 Document passed authenticity verification"
-            : "🔴 Document did not pass authenticity verification"}
-        </h3>
       </div>
     )
   }
@@ -807,12 +812,25 @@ export default function App() {
             return
           }
 
-          if (/^\d+$/.test(data) && data.length > 25 && data.length < 30) {
+          if (/^\d+$/.test(data) && data.length === 26) {
             setDecryptedData({
-              "Identity Number": data.slice(-14, -1),
-              "Card Serial Number": data.slice(0, -14),
+              "Identity Number": data.slice(12, 25),
+              "Card Serial Number": data.slice(0, 12),
             })
 
+            setStep(4)
+            return
+          }
+
+          const [digits, json] = data.split("\r")
+          let parsedJson = null
+
+          try {
+            parsedJson = JSON.parse(json)
+          } catch (e) {}
+
+          if (/^\d+$/.test(digits) && parsedJson) {
+            setDecryptedData(parsedJson)
             setStep(4)
             return
           }
@@ -823,7 +841,7 @@ export default function App() {
           if (decodeError) {
             console.log(decodeError)
             toast.error(
-              "Failed to decode, make sure its NADRA Digital ID QR code",
+              "Failed to decode, make sure you are scanning NADRA issued CNIC QR or Barcode",
             )
             return
           }
