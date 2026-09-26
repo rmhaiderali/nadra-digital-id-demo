@@ -1,31 +1,29 @@
 import { DateTime } from "luxon"
 import nadraDigitalId from "nadra-digital-id"
-import getHashFunctionByVersion from "./getHashFunctionByVersion.js"
+import matchPin from "./matchPin.js"
 import { isValidBase64, range, dateToUnixDay, unixDayToDate } from "./utils.js"
 
 export default async function crackGenerationDate(
-  start,
-  end,
-  pin,
-  dateFormat,
   decodedData,
+  pin,
+  dateStart,
+  dateEnd,
+  dateFormat,
   crackingGenerationDateRange = {},
   crackingGenerationDateStatus = {},
 ) {
-  const { data: hashFunction, error: hashFunctionError } =
-    getHashFunctionByVersion(decodedData.v)
+  const { match: matchedPin, error: matchPinError } = await matchPin(
+    decodedData,
+    pin,
+  )
 
-  if (hashFunctionError) {
-    return { error: hashFunctionError }
+  console.log(matchedPin, matchPinError)
+
+  if (matchPinError) {
+    return { error: matchPinError }
   }
 
-  const { data: pinHash, error: pinHashError } = hashFunction.fn(pin)
-
-  if (pinHashError) {
-    return { error: "Failed to hash PIN" }
-  }
-
-  if (decodedData.hash !== pinHash) {
+  if (!matchedPin) {
     return { error: "Wrong PIN" }
   }
 
@@ -37,14 +35,10 @@ export default async function crackGenerationDate(
 
   crackingGenerationDateStatus.value = "cracking"
 
-  const startUnixDay = dateToUnixDay(start)
-  const endUnixDay = dateToUnixDay(end)
+  const unixDayStart = dateToUnixDay(dateStart)
+  const unixDayEnd = dateToUnixDay(dateEnd)
 
-  let error = false
-  let crackedVC = null
-  let crackedDate = null
-
-  main: for (const unixDay of range(startUnixDay, endUnixDay)) {
+  for (const unixDay of range(unixDayStart, unixDayEnd)) {
     const dateToCrack = DateTime.fromJSDate(unixDayToDate(unixDay), {
       zone: "utc",
     }).setZone("Asia/Karachi", { keepLocalTime: true })
@@ -60,8 +54,7 @@ export default async function crackGenerationDate(
       })
 
     if (timeRangeError) {
-      error = "Failed to calculate time range"
-      break main
+      return { error: "Failed to calculate time range" }
     }
 
     // console.log("Time Range", timeValues)
@@ -69,26 +62,19 @@ export default async function crackGenerationDate(
     for (const time of timeValues) {
       // wait a tick to update the UI with the new range being tried
       await new Promise((resolve) => setTimeout(resolve, 0))
+
       if (crackingGenerationDateStatus.value !== "cracking")
         return { aborted: true }
 
-      const result = nadraDigitalId.decrypt(vc, pin, time)
+      const { data: decryptedData } = nadraDigitalId.decrypt(vc, pin, time)
 
-      if (result.data) {
+      if (decryptedData) {
         try {
-          crackedVC = JSON.parse(result.data)
-          crackedDate = time
-          break main
+          return { data: { date: time, vc: JSON.parse(decryptedData) } }
         } catch (e) {}
       }
     }
   }
-
-  crackingGenerationDateRange.value = ""
-
-  if (error) return { error }
-
-  if (crackedVC) return { data: { date: crackedDate, vc: crackedVC } }
 
   return { notfound: true }
 }

@@ -8,6 +8,7 @@ import zxingWriterWasmUrl from "/node_modules/zxing-wasm/dist/writer/zxing_write
 import Scanner from "./Scanner.jsx"
 import Loading from "./Loading.jsx"
 import crackPin from "./crackPin.js"
+import matchGenerationDate from "./matchGenerationDate.js"
 import crackGenerationDate from "./crackGenerationDate.js"
 
 // nadraDigitalId.setDebug(true)
@@ -451,7 +452,6 @@ export default function App() {
     if (error) {
       crackedPin.value = ""
       crackingPinStatus.value = "error"
-      console.log(error)
       toast.error(error)
     }
 
@@ -475,13 +475,13 @@ export default function App() {
     }
   }
 
-  async function crackGenerationDateWrapper(start, end) {
+  async function crackGenerationDateWrapper(dateStart, dateEnd) {
     const { error, aborted, data, notfound } = await crackGenerationDate(
-      start,
-      end,
-      pin,
-      dateFormat,
       decodedData,
+      pin,
+      dateStart,
+      dateEnd,
+      dateFormat,
       crackingGenerationDateRange,
       crackingGenerationDateStatus,
     )
@@ -489,7 +489,6 @@ export default function App() {
     if (error) {
       crackedGenerationDate.value = ""
       crackingGenerationDateStatus.value = "error"
-      console.log(error)
       toast.error(error)
     }
 
@@ -529,26 +528,18 @@ export default function App() {
       return
     }
 
-    const status = signal("not started")
-
-    status.subscribe((value) => {
-      if (value === "cracking") setStep(2)
-    })
+    setStep(2)
 
     const date = new Date(generationDate)
 
-    const { error, data, notfound } = await crackGenerationDate(
-      date,
-      date,
-      pin,
-      dateFormat,
+    const { error, data, notfound } = await matchGenerationDate(
       decodedData,
-      undefined,
-      status,
+      pin,
+      date,
+      dateFormat,
     )
 
     if (error) {
-      console.log(error)
       toast.error(error)
       setStep(1)
     }

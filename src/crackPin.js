@@ -23,47 +23,37 @@ export default async function crackPin(
 
   crackingPinStatus.value = "cracking"
 
-  let error = false
-  let crackedPin = null
-
-  main: for (const chunk of chunkArray(range(0, 999999), 100)) {
-    crackingPinRange.value = passwordRangeToString(chunk)
-
+  for (const chunk of chunkArray(range(0, 999999), 100)) {
     // wait a tick to update the UI with the new range being tried
     await new Promise((resolve) => setTimeout(resolve, 0))
+
     if (crackingPinStatus.value !== "cracking") return { aborted: true }
 
+    crackingPinRange.value = passwordRangeToString(chunk)
+
     for (const i of chunk) {
-      const pinsToCrack = []
+      const pinsToTest = []
 
-      if (i < 10000) pinsToCrack.push(i.toString().padStart(4, "0"))
+      if (i < 10000) pinsToTest.push(i.toString().padStart(4, "0"))
 
-      if (i < 100000) pinsToCrack.push(i.toString().padStart(5, "0"))
+      if (i < 100000) pinsToTest.push(i.toString().padStart(5, "0"))
 
-      pinsToCrack.push(i.toString().padStart(6, "0"))
+      pinsToTest.push(i.toString().padStart(6, "0"))
 
-      for (const pinToCrack of pinsToCrack) {
+      for (const pinToTest of pinsToTest) {
         const { data: possiblePinHash, error: possiblePinHashError } =
-          hashFunction.fn(pinToCrack)
+          hashFunction.fn(pinToTest)
 
         if (possiblePinHashError) {
-          error = "Error hashing PIN:" + possiblePinHashError
-          break main
+          return { error: "Error hashing PIN:" + possiblePinHashError }
         }
 
         if (decodedData.hash === possiblePinHash) {
-          crackedPin = pinToCrack
-          break main
+          return { data: pinToTest }
         }
       }
     }
   }
-
-  crackingPinRange.value = ""
-
-  if (error) return { error }
-
-  if (crackedPin) return { data: crackedPin }
 
   return { notfound: true }
 }
