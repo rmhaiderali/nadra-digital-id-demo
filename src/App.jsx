@@ -486,7 +486,7 @@ export default function App() {
       const { error: verificationError } = await nadraDigitalId.verify(data.vc)
       setIsDocumentVerified(!verificationError)
       setDecryptedData(data.vc)
-      console.log("Decrypted Data", data.vc)
+      console.log("Decrypted Data", data)
     }
 
     if (notfound) {
@@ -527,7 +527,7 @@ export default function App() {
       const { error: verificationError } = await nadraDigitalId.verify(data.vc)
       setIsDocumentVerified(!verificationError)
       setDecryptedData(data.vc)
-      console.log("Decrypted Data", data.vc)
+      console.log("Decrypted Data", data)
       setStep(3)
     }
 
@@ -801,10 +801,7 @@ export default function App() {
             nadraDigitalId.decode(data)
 
           if (decodeError) {
-            console.log(decodeError)
-            toast.error(
-              "Failed to decode, make sure you are scanning NADRA issued CNIC QR or Barcode",
-            )
+            toast.error(decodeError)
             return
           }
 
@@ -818,7 +815,9 @@ export default function App() {
 
           console.log("Decoded Data", decodedObject)
 
-          if ("credentialSubject" in decodedObject) {
+          const isUnencrypted = "credentialSubject" in decodedObject
+
+          if (isUnencrypted) {
             const { error: verificationError } =
               await nadraDigitalId.verify(decodedObject)
 
