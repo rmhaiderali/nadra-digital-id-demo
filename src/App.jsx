@@ -8,8 +8,8 @@ import zxingWriterWasmUrl from "/node_modules/zxing-wasm/dist/writer/zxing_write
 import Scanner from "./Scanner.jsx"
 import Loading from "./Loading.jsx"
 import crackPin from "./utils/crackPin.js"
-import matchGenerationDate from "./utils/matchGenerationDate.js"
-import crackGenerationDate from "./utils/crackGenerationDate.js"
+import matchSaltDate from "./utils/matchSaltDateAndDecrypt.js"
+import crackSaltDate from "./utils/crackSaltDateAndDecrypt.js"
 
 // nadraDigitalId.setDebug(true)
 
@@ -53,9 +53,9 @@ const crackedPin = signal("")
 const crackingPinRange = signal("")
 const crackingPinStatus = signal("not started")
 
-const crackedGenerationDate = signal("")
-const crackingGenerationDateRange = signal("")
-const crackingGenerationDateStatus = signal("not started")
+const crackedSaltDate = signal("")
+const crackingSaltDateRange = signal("")
+const crackingSaltDateStatus = signal("not started")
 
 export default function App() {
   const [devices, setDevices] = useState(null)
@@ -71,42 +71,20 @@ export default function App() {
   }
 
   // 0: scaning
-  // 1: asking for PIN and generation date
+  // 1: asking for PIN and creation/salt date
   // 2: decrypting
   // 3: showing verifiable document data
   // 4: showing legacy document data
   const [step, setStep] = useState(0)
 
   const [pin, setPin] = useState("")
-  const [generationDate, setGenerationDate] = useState("")
+  const [saltDate, setSaltDate] = useState("")
   const [decodedData, setDecodedData] = useState(null)
   const [decryptedData, setDecryptedData] = useState(null)
   const [isDocumentVerified, setIsDocumentVerified] = useState(false)
 
-  // const [crackedPin, setCrackedPin] = useState("")
-  // const [crackingPinRange, setCrackingPinRange] = useState("")
-  // const [crackingPinStatus, _setCrackingPinStatus] = useState("not started")
-  //
-  // const crackingPinStatusRef = useRef(crackingPinStatus)
-  // const setCrackingPinStatus = (status) => {
-  //   _setCrackingPinStatus(status)
-  //   crackingPinStatusRef.current = status
-  // }
-
-  // const [crackedGenerationDate, setCrackedGenerationDate] = useState("")
-  // const [crackingGenerationDateRange, setCrackingGenerationDateRange] =
-  //   useState("")
-  // const [crackingGenerationDateStatus, _setCrackingGenerationDateStatus] =
-  //   useState("not started")
-  //
-  // const crackingGenerationDateStatusRef = useRef(crackingGenerationDateStatus)
-  // const setCrackingGenerationDateStatus = (status) => {
-  //   _setCrackingGenerationDateStatus(status)
-  //   crackingGenerationDateStatusRef.current = status
-  // }
-
-  const [crackGenerationDateStart, setCrackGenerationDateStart] = useState("")
-  const [crackGenerationDateEnd, setCrackGenerationDateEnd] = useState("")
+  const [crackSaltDateStart, setCrackSaltDateStart] = useState("")
+  const [crackSaltDateEnd, setCrackSaltDateEnd] = useState("")
 
   useEffect(() => {
     if (location.search.match(/\?fullaccess/i) && !fullAccess)
@@ -123,12 +101,12 @@ export default function App() {
     crackedPin.value = ""
     crackingPinStatus.value = "not started"
 
-    setGenerationDate("")
-    crackedGenerationDate.value = ""
-    crackingGenerationDateStatus.value = "not started"
+    setSaltDate("")
+    crackedSaltDate.value = ""
+    crackingSaltDateStatus.value = "not started"
 
-    setCrackGenerationDateStart("")
-    setCrackGenerationDateEnd("")
+    setCrackSaltDateStart("")
+    setCrackSaltDateEnd("")
   }
 
   const scanAgainButton = (
@@ -429,12 +407,12 @@ export default function App() {
     </button>
   )
 
-  const crackGenerationDateAgain = (
+  const crackSaltDateAgain = (
     <button
       onClick={() => {
-        setCrackGenerationDateStart("")
-        setCrackGenerationDateEnd("")
-        crackingGenerationDateStatus.value = "select range"
+        setCrackSaltDateStart("")
+        setCrackSaltDateEnd("")
+        crackingSaltDateStatus.value = "select range"
       }}
       style={{ marginLeft: "4px" }}
     >
@@ -475,64 +453,65 @@ export default function App() {
     }
   }
 
-  async function crackGenerationDateWrapper(dateStart, dateEnd) {
-    const { error, aborted, data, notfound } = await crackGenerationDate(
+  async function crackSaltDateWrapper(dateStart, dateEnd) {
+    const { error, aborted, data, notfound } = await crackSaltDate(
       decodedData,
       pin,
       dateStart,
       dateEnd,
       dateFormat,
-      crackingGenerationDateRange,
-      crackingGenerationDateStatus,
+      crackingSaltDateRange,
+      crackingSaltDateStatus,
     )
 
     if (error) {
-      crackedGenerationDate.value = ""
-      crackingGenerationDateStatus.value = "error"
+      crackedSaltDate.value = ""
+      crackingSaltDateStatus.value = "error"
       toast.error(error)
     }
 
     if (aborted) {
-      crackedGenerationDate.value = ""
-      crackingGenerationDateStatus.value = "not started"
-      toast.info("Cracking Generation Date Aborted")
+      crackedSaltDate.value = ""
+      crackingSaltDateStatus.value = "not started"
+      toast.info("Cracking Creation Date Aborted")
     }
 
     if (data) {
       const crackedLDate = DateTime.fromJSDate(data.salt)
-      setGenerationDate(crackedLDate.toFormat("yyyy-MM-dd"))
-      crackedGenerationDate.value = crackedLDate.toFormat(dateFormat)
-      crackingGenerationDateStatus.value = "cracked"
-      toast.success("Cracked Generation Date Successfully")
+      setSaltDate(crackedLDate.toFormat("yyyy-MM-dd"))
+      crackedSaltDate.value = crackedLDate.toFormat(dateFormat)
+      crackingSaltDateStatus.value = "cracked"
+      toast.success("Cracked Creation Date Successfully")
 
       const { error: verificationError } = await nadraDigitalId.verify(data.vc)
       setIsDocumentVerified(!verificationError)
       setDecryptedData(data.vc)
+      console.log("Decrypted Data", data.vc)
     }
 
     if (notfound) {
-      crackedGenerationDate.value = ""
-      crackingGenerationDateStatus.value = "not found"
-      toast.error("Generation Date Not Found")
+      crackedSaltDate.value = ""
+      crackingSaltDateStatus.value = "not found"
+      toast.error("Creation Date Not Found")
     }
   }
 
   async function decryptOrShowDocument() {
-    if (crackingGenerationDateStatus.value === "cracked") {
+    if (crackingSaltDateStatus.value === "cracked") {
       setStep(3)
       return
     }
 
-    if (!generationDate) {
-      toast.error("Please select Generation Date")
+    if (!saltDate) {
+      toast.error("Please select Creation Date")
       return
     }
 
     setStep(2)
 
-    const date = new Date(generationDate)
+    const date = new Date(saltDate)
 
-    const { error, data, notfound } = await matchGenerationDate(
+    const { error, data, notfound } = await matchSaltDate(
       decodedData,
       pin,
       date,
@@ -548,11 +527,12 @@ export default function App() {
       const { error: verificationError } = await nadraDigitalId.verify(data.vc)
       setIsDocumentVerified(!verificationError)
       setDecryptedData(data.vc)
+      console.log("Decrypted Data", data.vc)
       setStep(3)
     }
 
     if (notfound) {
-      toast.error("Wrong Generation Date")
+      toast.error("Wrong Creation Date")
       setStep(1)
     }
   }
@@ -610,7 +590,7 @@ export default function App() {
               </td>
             )}
           </tr>
-          {crackingGenerationDateStatus.value === "select range" && (
+          {crackingSaltDateStatus.value === "select range" && (
             <tr>
               <td></td>
               <td></td>
@@ -618,60 +598,53 @@ export default function App() {
             </tr>
           )}
           <tr>
-            <td>Generation Date</td>
+            <td>Creation Date</td>
             <td>
               <input
                 type="date"
-                value={generationDate}
+                value={saltDate}
                 style={{ width: "-webkit-fill-available" }}
-                onChange={(e) => setGenerationDate(e.target.value)}
+                onChange={(e) => setSaltDate(e.target.value)}
               />
             </td>
             {fullAccess && (
               <td>
-                {crackingGenerationDateStatus.value === "not started" && (
+                {crackingSaltDateStatus.value === "not started" && (
                   <button
                     onClick={() => {
-                      crackingGenerationDateStatus.value = "select range"
+                      crackingSaltDateStatus.value = "select range"
                     }}
                   >
                     Crack
                   </button>
                 )}
-                {crackingGenerationDateStatus.value === "select range" && (
+                {crackingSaltDateStatus.value === "select range" && (
                   <div style={{ display: "flex", gap: "6px" }}>
                     Start
                     <input
                       type="date"
                       min="2025-03-01"
-                      value={crackGenerationDateStart}
-                      onChange={(e) =>
-                        setCrackGenerationDateStart(e.target.value)
-                      }
+                      value={crackSaltDateStart}
+                      onChange={(e) => setCrackSaltDateStart(e.target.value)}
                     />
                     End
                     <input
                       type="date"
                       min="2025-03-02"
-                      value={crackGenerationDateEnd}
-                      onChange={(e) =>
-                        setCrackGenerationDateEnd(e.target.value)
-                      }
+                      value={crackSaltDateEnd}
+                      onChange={(e) => setCrackSaltDateEnd(e.target.value)}
                     />
                     <button
                       onClick={() => {
-                        if (
-                          !crackGenerationDateStart ||
-                          !crackGenerationDateEnd
-                        ) {
+                        if (!crackSaltDateStart || !crackSaltDateEnd) {
                           toast.error("Please select both start and end dates")
                           return
                         }
 
-                        const start = new Date(crackGenerationDateStart)
-                        const end = new Date(crackGenerationDateEnd)
+                        const start = new Date(crackSaltDateStart)
+                        const end = new Date(crackSaltDateEnd)
 
-                        if (start < end) crackGenerationDateWrapper(start, end)
+                        if (start < end) crackSaltDateWrapper(start, end)
                         else toast.error("End date must be after start date")
                       }}
                     >
@@ -679,16 +652,16 @@ export default function App() {
                     </button>
                     <button
                       onClick={() => {
-                        setCrackGenerationDateStart("")
-                        setCrackGenerationDateEnd("")
-                        crackingGenerationDateStatus.value = "not started"
+                        setCrackSaltDateStart("")
+                        setCrackSaltDateEnd("")
+                        crackingSaltDateStatus.value = "not started"
                       }}
                     >
                       Cancel
                     </button>
                   </div>
                 )}
-                {crackingGenerationDateStatus.value === "cracking" && (
+                {crackingSaltDateStatus.value === "cracking" && (
                   <>
                     <div
                       style={{
@@ -698,25 +671,23 @@ export default function App() {
                       }}
                     >
                       <Loading />
-                      <span>Cracking with {crackingGenerationDateRange}</span>
+                      <span>Cracking with {crackingSaltDateRange}</span>
                     </div>
                   </>
                 )}
-                {crackingGenerationDateStatus.value === "not found" && (
+                {crackingSaltDateStatus.value === "not found" && (
                   <>
-                    <span>No Generation Date found in range</span>
-                    {crackGenerationDateAgain}
+                    <span>No Creation Date found in range</span>
+                    {crackSaltDateAgain}
                   </>
                 )}
-                {crackingGenerationDateStatus.value === "cracked" && (
-                  <span>
-                    Cracked Generation Date is {crackedGenerationDate}
-                  </span>
+                {crackingSaltDateStatus.value === "cracked" && (
+                  <span>Cracked Creation Date is {crackedSaltDate}</span>
                 )}
-                {crackingGenerationDateStatus.value === "error" && (
+                {crackingSaltDateStatus.value === "error" && (
                   <>
-                    <span>Error while cracking Generation Date</span>
-                    {crackGenerationDateAgain}
+                    <span>Error while cracking Creation Date</span>
+                    {crackSaltDateAgain}
                   </>
                 )}
               </td>
@@ -731,7 +702,7 @@ export default function App() {
                 onClick={decryptOrShowDocument}
                 style={{ width: "-webkit-fill-available" }}
               >
-                {crackingGenerationDateStatus.value === "cracked"
+                {crackingSaltDateStatus.value === "cracked"
                   ? "Show Document"
                   : "Decrypt"}
               </button>

@@ -1,16 +1,21 @@
 import { DateTime } from "luxon"
 import nadraDigitalId from "nadra-digital-id"
 import matchPin from "./matchPin.js"
-import { isValidBase64, range, dateToUnixDay, unixDayToDate } from "./commonFunctions.js"
+import {
+  isValidBase64,
+  range,
+  dateToUnixDay,
+  unixDayToDate,
+} from "./commonFunctions.js"
 
-export default async function crackGenerationDate(
+export default async function crackSaltDateAndDecrypt(
   decodedData,
   pin,
   dateStart,
   dateEnd,
   dateFormat,
-  crackingGenerationDateRange = {},
-  crackingGenerationDateStatus = {},
+  crackingSaltDateRange = {},
+  crackingSaltDateStatus = {},
 ) {
   const { match: matchedPin, error: matchPinError } = await matchPin(
     decodedData,
@@ -29,7 +34,7 @@ export default async function crackGenerationDate(
     return { error: "VC is not a valid Base64 string" }
   }
 
-  crackingGenerationDateStatus.value = "cracking"
+  crackingSaltDateStatus.value = "cracking"
 
   const unixDayStart = dateToUnixDay(dateStart)
   const unixDayEnd = dateToUnixDay(dateEnd)
@@ -39,7 +44,7 @@ export default async function crackGenerationDate(
       zone: "utc",
     }).setZone("Asia/Karachi", { keepLocalTime: true })
 
-    crackingGenerationDateRange.value = dateToCrack.toFormat(dateFormat)
+    crackingSaltDateRange.value = dateToCrack.toFormat(dateFormat)
 
     const { data: timeValues, error: timeRangeError } =
       nadraDigitalId.timeRange({
@@ -59,8 +64,7 @@ export default async function crackGenerationDate(
       // wait a tick to update the UI with the new range being tried
       await new Promise((resolve) => setTimeout(resolve, 0))
 
-      if (crackingGenerationDateStatus.value !== "cracking")
-        return { aborted: true }
+      if (crackingSaltDateStatus.value !== "cracking") return { aborted: true }
 
       const { date, vc } = decodedData
 

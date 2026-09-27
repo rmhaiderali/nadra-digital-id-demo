@@ -1,9 +1,13 @@
 import { DateTime } from "luxon"
 import nadraDigitalId from "nadra-digital-id"
 import matchPin from "./matchPin.js"
-import { isValidBase64, dateToUnixDay, unixDayToDate } from "./commonFunctions.js"
+import {
+  isValidBase64,
+  dateToUnixDay,
+  unixDayToDate,
+} from "./commonFunctions.js"
 
-export default async function matchGenerationDate(decodedData, pin, date) {
+export default async function matchSaltDateAndDecrypt(decodedData, pin, date) {
   const { match: matchedPin, error: matchPinError } = await matchPin(
     decodedData,
     pin,
