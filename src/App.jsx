@@ -7,9 +7,9 @@ import { writeBarcode, prepareZXingModule } from "zxing-wasm/writer"
 import zxingWriterWasmUrl from "/node_modules/zxing-wasm/dist/writer/zxing_writer.wasm?url"
 import Scanner from "./Scanner.jsx"
 import Loading from "./Loading.jsx"
-import crackPin from "./crackPin.js"
-import matchGenerationDate from "./matchGenerationDate.js"
-import crackGenerationDate from "./crackGenerationDate.js"
+import crackPin from "./utils/crackPin.js"
+import matchGenerationDate from "./utils/matchGenerationDate.js"
+import crackGenerationDate from "./utils/crackGenerationDate.js"
 
 // nadraDigitalId.setDebug(true)
 
@@ -499,7 +499,7 @@ export default function App() {
     }
 
     if (data) {
-      const crackedLDate = DateTime.fromJSDate(data.date)
+      const crackedLDate = DateTime.fromJSDate(data.salt)
       setGenerationDate(crackedLDate.toFormat("yyyy-MM-dd"))
       crackedGenerationDate.value = crackedLDate.toFormat(dateFormat)
       crackingGenerationDateStatus.value = "cracked"

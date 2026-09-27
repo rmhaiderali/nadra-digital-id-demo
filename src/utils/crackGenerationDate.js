@@ -1,7 +1,7 @@
 import { DateTime } from "luxon"
 import nadraDigitalId from "nadra-digital-id"
 import matchPin from "./matchPin.js"
-import { isValidBase64, range, dateToUnixDay, unixDayToDate } from "./utils.js"
+import { isValidBase64, range, dateToUnixDay, unixDayToDate } from "./commonFunctions.js"
 
 export default async function crackGenerationDate(
   decodedData,
@@ -17,8 +17,6 @@ export default async function crackGenerationDate(
     pin,
   )
 
-  console.log(matchedPin, matchPinError)
-
   if (matchPinError) {
     return { error: matchPinError }
   }
@@ -27,9 +25,7 @@ export default async function crackGenerationDate(
     return { error: "Wrong PIN" }
   }
 
-  const vc = decodedData.vc
-
-  if (!isValidBase64(vc)) {
+  if (!isValidBase64(decodedData.vc)) {
     return { error: "VC is not a valid Base64 string" }
   }
 
@@ -66,13 +62,21 @@ export default async function crackGenerationDate(
       if (crackingGenerationDateStatus.value !== "cracking")
         return { aborted: true }
 
-      const { data: decryptedData } = nadraDigitalId.decrypt(vc, pin, time)
+      const { date, vc } = decodedData
 
-      if (decryptedData) {
-        try {
-          return { data: { date: time, vc: JSON.parse(decryptedData) } }
-        } catch (e) {}
-      }
+      const { data: decryptedDate } = nadraDigitalId.decrypt(date, pin, time)
+
+      const { data: decryptedVC } = nadraDigitalId.decrypt(vc, pin, time)
+
+      try {
+        return {
+          data: {
+            salt: time,
+            date: new Date(decryptedDate + "Z"),
+            vc: JSON.parse(decryptedVC),
+          },
+        }
+      } catch (e) {}
     }
   }
 

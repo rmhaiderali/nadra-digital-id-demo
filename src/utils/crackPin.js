@@ -1,5 +1,5 @@
 import getHashFunctionByVersion from "./getHashFunctionByVersion.js"
-import { chunkArray, range, passwordRangeToString } from "./utils.js"
+import { chunkArray, range, passwordRangeToString } from "./commonFunctions.js"
 
 export default async function crackPin(
   decodedData,

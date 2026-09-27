@@ -1,7 +1,7 @@
 import { DateTime } from "luxon"
 import nadraDigitalId from "nadra-digital-id"
 import matchPin from "./matchPin.js"
-import { isValidBase64, dateToUnixDay, unixDayToDate } from "./utils.js"
+import { isValidBase64, dateToUnixDay, unixDayToDate } from "./commonFunctions.js"
 
 export default async function matchGenerationDate(decodedData, pin, date) {
   const { match: matchedPin, error: matchPinError } = await matchPin(
@@ -17,9 +17,7 @@ export default async function matchGenerationDate(decodedData, pin, date) {
     return { error: "Wrong PIN" }
   }
 
-  const vc = decodedData.vc
-
-  if (!isValidBase64(vc)) {
+  if (!isValidBase64(decodedData.vc)) {
     return { error: "VC is not a valid Base64 string" }
   }
 
@@ -46,13 +44,21 @@ export default async function matchGenerationDate(decodedData, pin, date) {
     // wait a tick to update the UI with the new range being tried
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    const { data: decryptedData } = nadraDigitalId.decrypt(vc, pin, time)
+    const { date, vc } = decodedData
 
-    if (decryptedData) {
-      try {
-        return { data: { date: time, vc: JSON.parse(decryptedData) } }
-      } catch (e) {}
-    }
+    const { data: decryptedDate } = nadraDigitalId.decrypt(date, pin, time)
+
+    const { data: decryptedVC } = nadraDigitalId.decrypt(vc, pin, time)
+
+    try {
+      return {
+        data: {
+          salt: time,
+          date: new Date(decryptedDate + "Z"),
+          vc: JSON.parse(decryptedVC),
+        },
+      }
+    } catch (e) {}
   }
 
   return { notfound: true }
