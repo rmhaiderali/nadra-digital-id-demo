@@ -60,7 +60,7 @@ table {
   stroke-dashoffset: 60;
 }
 
-.urdu {
+.rtl {
   direction: rtl;
   text-align: end;
 }

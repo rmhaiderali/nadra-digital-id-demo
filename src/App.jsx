@@ -157,27 +157,25 @@ export default function App() {
           <tbody>
             <Heading>Document Data:</Heading>
 
-            {Object.entries(finalData).map(([label, value]) => (
-              <tr key={label}>
-                <td>
-                  <strong>{label}:</strong>
-                </td>
-                <td
-                  className={
-                    [
-                      "Name",
-                      "Father/Husband Name",
-                      "Address Line 1",
-                      "Address Line 2",
-                    ].includes(label)
-                      ? "urdu"
-                      : ""
-                  }
-                >
-                  {nadraDigitalId.normalizeText(value).data || value}
-                </td>
-              </tr>
-            ))}
+            {Object.entries(finalData).map(([label, value]) => {
+              const normalizedText =
+                nadraDigitalId.normalizeText(value).data || value
+
+              return (
+                <tr key={label}>
+                  <td>
+                    <strong>{label}:</strong>
+                  </td>
+                  <td
+                    className={
+                      normalizedText.match(/[\u0600-\u06FF]/) ? "rtl" : ""
+                    }
+                  >
+                    {normalizedText}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -388,25 +386,24 @@ export default function App() {
 
               return filteredFields
                 .filter((f) => f?.label && f?.value)
-                .map((f) => (
-                  <tr key={f.label}>
-                    <td>
-                      <strong>{f.label}:</strong>
-                    </td>
-                    <td
-                      className={
-                        /urdu/i.test(f.label) ||
-                        ["Temporary Address", "Permanent Address"].includes(
-                          f.label,
-                        )
-                          ? "urdu"
-                          : ""
-                      }
-                    >
-                      {nadraDigitalId.normalizeText(f.value).data || f.value}
-                    </td>
-                  </tr>
-                ))
+                .map((f) => {
+                  const normalizedText =
+                    nadraDigitalId.normalizeText(f.value).data || f.value
+                  return (
+                    <tr key={f.label}>
+                      <td>
+                        <strong>{f.label}:</strong>
+                      </td>
+                      <td
+                        className={
+                          normalizedText.match(/[\u0600-\u06FF]/) ? "rtl" : ""
+                        }
+                      >
+                        {normalizedText}
+                      </td>
+                    </tr>
+                  )
+                })
             })()}
           </tbody>
         </table>
