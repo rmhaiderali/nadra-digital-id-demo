@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+src/utils/usage/credentials.json
+src/utils/usage/encryptedData.json
