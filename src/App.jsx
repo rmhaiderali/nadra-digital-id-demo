@@ -24,7 +24,7 @@ const dateDelimiter =
 
 const dateFormat = "yyyy" + dateDelimiter + "MM" + dateDelimiter + "dd"
 
-export function downloadBlob(blob, filename) {
+function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
@@ -79,8 +79,8 @@ export default function App() {
 
   const [pin, setPin] = useState("")
   const [saltDate, setSaltDate] = useState("")
-  const [decodedData, setDecodedData] = useState(null)
-  const [decryptedData, setDecryptedData] = useState(null)
+  const [encryptedData, setEncryptedData] = useState(null)
+  const [finalData, setFinalData] = useState(null)
   const [isDocumentVerified, setIsDocumentVerified] = useState(false)
 
   const [crackSaltDateStart, setCrackSaltDateStart] = useState("")
@@ -96,6 +96,9 @@ export default function App() {
 
   function scanAgain() {
     setStep(0)
+    setEncryptedData(null)
+    setFinalData(null)
+    setIsDocumentVerified(false)
 
     setPin("")
     crackedPin.value = ""
@@ -116,7 +119,7 @@ export default function App() {
   )
 
   function copyAsJson() {
-    navigator.clipboard.writeText(JSON.stringify(decryptedData, null, 2))
+    navigator.clipboard.writeText(JSON.stringify(finalData, null, 2))
     toast.success("Decrypted JSON Copied to Clipboard")
   }
 
@@ -154,7 +157,7 @@ export default function App() {
           <tbody>
             <Heading>Document Data:</Heading>
 
-            {Object.entries(decryptedData).map(([label, value]) => (
+            {Object.entries(finalData).map(([label, value]) => (
               <tr key={label}>
                 <td>
                   <strong>{label}:</strong>
@@ -196,7 +199,7 @@ export default function App() {
       onClick={async () => {
         // const pin = "0000"
         // const date = new Date()
-        // const { proof, ...vc } = JSON.parse(JSON.stringify(decryptedData))
+        // const { proof, ...vc } = JSON.parse(JSON.stringify(finalData))
 
         // date.setHours(0, 0, 0, 0)
 
@@ -240,7 +243,7 @@ export default function App() {
 
         // const jsonString = JSON.stringify(objectToEncode)
 
-        const jsonString = JSON.stringify(decryptedData)
+        const jsonString = JSON.stringify(finalData)
 
         const { data: encodedData, error: encodeError } =
           nadraDigitalId.encode(jsonString)
@@ -293,16 +296,16 @@ export default function App() {
           <tbody>
             <Heading>Metadata:</Heading>
 
-            {decryptedData.id && (
+            {finalData.id && (
               <tr>
                 <td>
                   <strong>ID:</strong>
                 </td>
-                <td>{decryptedData.id}</td>
+                <td>{finalData.id}</td>
               </tr>
             )}
             {[""].map(() => {
-              const type = decryptedData.type
+              const type = finalData.type
                 ?.toString()
                 .split(",")
                 .filter((t) => t !== "VerifiableCredential")
@@ -318,33 +321,33 @@ export default function App() {
                 </tr>
               )
             })}
-            {decryptedData.issuer && (
+            {finalData.issuer && (
               <tr>
                 <td>
                   <strong>Issuer:</strong>
                 </td>
-                <td>{decryptedData.issuer}</td>
+                <td>{finalData.issuer}</td>
               </tr>
             )}
-            {decryptedData.issuanceDate && (
+            {finalData.issuanceDate && (
               <tr>
                 <td>
                   <strong>Issuance Date:</strong>
                 </td>
                 <td>
-                  {DateTime.fromISO(decryptedData.issuanceDate).toFormat(
+                  {DateTime.fromISO(finalData.issuanceDate).toFormat(
                     dateFormat + (is12HourCycle ? " hh:mm a" : " HH:mm"),
                   )}
                 </td>
               </tr>
             )}
-            {decryptedData.expirationDate && (
+            {finalData.expirationDate && (
               <tr>
                 <td>
                   <strong>Expiration Date:</strong>
                 </td>
                 <td>
-                  {DateTime.fromISO(decryptedData.expirationDate).toFormat(
+                  {DateTime.fromISO(finalData.expirationDate).toFormat(
                     dateFormat + (is12HourCycle ? " hh:mm a" : " HH:mm"),
                   )}
                 </td>
@@ -356,18 +359,32 @@ export default function App() {
               </td>
               <td>{isDocumentVerified ? "Passed" : "Failed"}</td>
             </tr>
+            <tr>
+              <td>
+                <strong>Is Encrypted:</strong>
+              </td>
+              <td>{encryptedData ? "Yes" : "No"}</td>
+            </tr>
+            {encryptedData && (
+              <tr>
+                <td>
+                  <strong>Encrypted Container Version:</strong>
+                </td>
+                <td>{encryptedData.v || "Unknown"}</td>
+              </tr>
+            )}
 
             <Heading>Document Data:</Heading>
 
             {(() => {
-              const fields = Object.values(decryptedData.credentialSubject)
+              const fields = Object.values(finalData.credentialSubject)
 
               const filteredFields =
                 fullAccess ||
-                !decodedData?.fields?.length ||
-                decodedData.fields.includes(-1)
+                !encryptedData?.fields?.length ||
+                encryptedData.fields.includes(-1)
                   ? fields
-                  : fields.filter((v, i) => decodedData.fields.includes(i))
+                  : fields.filter((v, i) => encryptedData.fields.includes(i))
 
               return filteredFields
                 .filter((f) => f?.label && f?.value)
@@ -422,7 +439,7 @@ export default function App() {
 
   async function crackPinWrapper() {
     const { error, aborted, data, notfound } = await crackPin(
-      decodedData,
+      encryptedData,
       crackingPinRange,
       crackingPinStatus,
     )
@@ -455,7 +472,7 @@ export default function App() {
 
   async function crackSaltDateWrapper(dateStart, dateEnd) {
     const { error, aborted, data, notfound } = await crackSaltDate(
-      decodedData,
+      encryptedData,
       pin,
       dateStart,
       dateEnd,
@@ -485,7 +502,7 @@ export default function App() {
 
       const { error: verificationError } = await nadraDigitalId.verify(data.vc)
       setIsDocumentVerified(!verificationError)
-      setDecryptedData(data.vc)
+      setFinalData(data.vc)
       console.log("Decrypted Data", data)
     }
 
@@ -512,7 +529,7 @@ export default function App() {
     const date = new Date(saltDate)
 
     const { error, data, notfound } = await matchSaltDate(
-      decodedData,
+      encryptedData,
       pin,
       date,
       dateFormat,
@@ -526,7 +543,7 @@ export default function App() {
     if (data) {
       const { error: verificationError } = await nadraDigitalId.verify(data.vc)
       setIsDocumentVerified(!verificationError)
-      setDecryptedData(data.vc)
+      setFinalData(data.vc)
       console.log("Decrypted Data", data)
       setStep(3)
     }
@@ -743,7 +760,7 @@ export default function App() {
               )
             }
 
-            setDecryptedData(
+            setFinalData(
               cleanObject(
                 decoded[2].length === 6
                   ? {
@@ -775,7 +792,7 @@ export default function App() {
           }
 
           if (/^\d+$/.test(data) && data.length === 26) {
-            setDecryptedData({
+            setFinalData({
               "Identity Number": data.slice(12, 25),
               "Card Serial Number": data.slice(0, 12),
             })
@@ -792,7 +809,7 @@ export default function App() {
           } catch (e) {}
 
           if (/^\d+$/.test(digits) && parsedJson) {
-            setDecryptedData(parsedJson)
+            setFinalData(parsedJson)
             setStep(4)
             return
           }
@@ -822,12 +839,12 @@ export default function App() {
               await nadraDigitalId.verify(decodedObject)
 
             setIsDocumentVerified(!verificationError)
-            setDecryptedData(decodedObject)
+            setFinalData(decodedObject)
             setStep(3)
             return
           }
 
-          setDecodedData(decodedObject)
+          setEncryptedData(decodedObject)
           setStep(1)
         }}
       />

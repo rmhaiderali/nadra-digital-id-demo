@@ -9,7 +9,7 @@ import {
 } from "./commonFunctions.js"
 
 export default async function crackSaltDateAndDecrypt(
-  decodedData,
+  encryptedData,
   pin,
   dateStart,
   dateEnd,
@@ -18,7 +18,7 @@ export default async function crackSaltDateAndDecrypt(
   crackingSaltDateStatus = {},
 ) {
   const { match: matchedPin, error: matchPinError } = await matchPin(
-    decodedData,
+    encryptedData,
     pin,
   )
 
@@ -30,7 +30,7 @@ export default async function crackSaltDateAndDecrypt(
     return { error: "Wrong PIN" }
   }
 
-  if (!isValidBase64(decodedData.vc)) {
+  if (!isValidBase64(encryptedData.vc)) {
     return { error: "VC is not a valid Base64 string" }
   }
 
@@ -66,7 +66,7 @@ export default async function crackSaltDateAndDecrypt(
 
       if (crackingSaltDateStatus.value !== "cracking") return { aborted: true }
 
-      const { date, vc } = decodedData
+      const { date, vc } = encryptedData
 
       const { data: decryptedDate } = nadraDigitalId.decrypt(date, pin, time)
 

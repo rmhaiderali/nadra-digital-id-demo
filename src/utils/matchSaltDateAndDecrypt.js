@@ -7,9 +7,13 @@ import {
   unixDayToDate,
 } from "./commonFunctions.js"
 
-export default async function matchSaltDateAndDecrypt(decodedData, pin, date) {
+export default async function matchSaltDateAndDecrypt(
+  encryptedData,
+  pin,
+  date,
+) {
   const { match: matchedPin, error: matchPinError } = await matchPin(
-    decodedData,
+    encryptedData,
     pin,
   )
 
@@ -21,7 +25,7 @@ export default async function matchSaltDateAndDecrypt(decodedData, pin, date) {
     return { error: "Wrong PIN" }
   }
 
-  if (!isValidBase64(decodedData.vc)) {
+  if (!isValidBase64(encryptedData.vc)) {
     return { error: "VC is not a valid Base64 string" }
   }
 
@@ -48,7 +52,7 @@ export default async function matchSaltDateAndDecrypt(decodedData, pin, date) {
     // wait a tick to update the UI with the new range being tried
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    const { date, vc } = decodedData
+    const { date, vc } = encryptedData
 
     const { data: decryptedDate } = nadraDigitalId.decrypt(date, pin, time)
 

@@ -2,22 +2,22 @@ import getHashFunctionByVersion from "./getHashFunctionByVersion.js"
 import { chunkArray, range, passwordRangeToString } from "./commonFunctions.js"
 
 export default async function crackPin(
-  decodedData,
+  encryptedData,
   crackingPinRange = {},
   crackingPinStatus = {},
 ) {
-  if (!decodedData.hash) {
+  if (!encryptedData.hash) {
     return { error: "No hash found in the decoded data" }
   }
 
   const { data: hashFunction, error: hashFunctionError } =
-    getHashFunctionByVersion(decodedData.v)
+    getHashFunctionByVersion(encryptedData.v)
 
   if (hashFunctionError) {
     return { error: hashFunctionError }
   }
 
-  if (decodedData.hash.length !== hashFunction.hexLength) {
+  if (encryptedData.hash.length !== hashFunction.hexLength) {
     return { error: "Not valid " + hashFunction.name + " hash" }
   }
 
@@ -48,7 +48,7 @@ export default async function crackPin(
           return { error: "Error hashing PIN:" + possiblePinHashError }
         }
 
-        if (decodedData.hash === possiblePinHash) {
+        if (encryptedData.hash === possiblePinHash) {
           return { data: pinToTest }
         }
       }
