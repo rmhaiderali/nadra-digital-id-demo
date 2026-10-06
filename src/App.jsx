@@ -263,7 +263,7 @@ export default function App() {
 
         console.log("Downloading QR Code", { payload, options })
 
-        downloadBarcode(payload, "nadra-digital-id-qr-code.png", options)
+        downloadBarcode(payload, "digital-id-qr-code.png", options)
       }}
     >
       Download QR Code
@@ -350,7 +350,7 @@ export default function App() {
 
         console.log("Downloading Encrypted QR Code", { payload, options })
 
-        downloadBarcode(payload, "nadra-digital-id-qr-code.png", options)
+        downloadBarcode(payload, "digital-id-qr-code.png", options)
       }}
     >
       Download Encrypted QR Code
