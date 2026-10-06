@@ -24,6 +24,16 @@ const dateDelimiter =
 
 const dateFormat = "yyyy" + dateDelimiter + "MM" + dateDelimiter + "dd"
 
+const formatsUsedOnDocuments = {
+  PDF417: ["CNIC"],
+  QRCode: ["CNIC", "Digital ID"],
+}
+
+const genericFormatNames = {
+  PDF417: "Barcode",
+  QRCode: "QR Code",
+}
+
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
@@ -33,6 +43,25 @@ function downloadBlob(blob, filename) {
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+async function downloadBarcode(data, filename, options) {
+  const { error, image } = await writeBarcode(data, options)
+
+  if (error) {
+    toast.error("Failed to generate " + options.format)
+    console.log(error)
+    return
+  }
+
+  downloadBlob(image, filename)
+}
+
+function toCreatorOptionsString(options) {
+  return Object.entries(options)
+    .filter(([k, v]) => v !== undefined && v !== null && v !== "")
+    .map(([k, v]) => k + "=" + v)
+    .join(",")
 }
 
 window.fullAccess = () => {
@@ -82,15 +111,18 @@ export default function App() {
   const [encryptedData, setEncryptedData] = useState(null)
   const [finalData, setFinalData] = useState(null)
   const [isDocumentVerified, setIsDocumentVerified] = useState(false)
+  const [detectedCode, setDetectedCode] = useState(null)
 
   const [crackSaltDateStart, setCrackSaltDateStart] = useState("")
   const [crackSaltDateEnd, setCrackSaltDateEnd] = useState("")
 
+  const [qrDataMask, setQrDataMask] = useState("")
+
   useEffect(() => {
-    if (location.search.match(/\?fullaccess/i) && !fullAccess)
+    if (location.search.match(/\?fullaccess$/i) && !fullAccess)
       window.fullAccess()
 
-    if (location.search.match(/\?revokefullaccess/i) && fullAccess)
+    if (location.search.match(/\?revokefullaccess$/i) && fullAccess)
       window.revokeFullAccess()
   }, [])
 
@@ -195,6 +227,55 @@ export default function App() {
     <button
       style={{ width: "-webkit-fill-available" }}
       onClick={async () => {
+        let payload = detectedCode.text
+
+        if (encryptedData) {
+          const jsonString = JSON.stringify(finalData)
+
+          const { data: encodedData, error: encodeError } =
+            nadraDigitalId.encode(jsonString)
+
+          if (encodeError) {
+            toast.error("Failed to encode data")
+            return
+          }
+
+          const prefix = finalData.type.includes("NATIONAL_ID")
+            ? "URN:VC1:"
+            : ""
+
+          payload = prefix + encodedData
+        }
+
+        const { ECLevel, DataMask, Version } = JSON.parse(detectedCode.extra)
+
+        const creatorOptions = toCreatorOptionsString(
+          encryptedData
+            ? { DataMask: qrDataMask }
+            : { DataMask, ECLevel, Version },
+        )
+
+        const options = {
+          scale: 4,
+          format: "QRCode",
+          options: creatorOptions,
+        }
+
+        console.log("Downloading QR Code", { payload, options })
+
+        downloadBarcode(payload, "nadra-digital-id-qr-code.png", options)
+      }}
+    >
+      Download QR Code
+    </button>
+  )
+
+  const downloadEncryptedQRCodeButton = (
+    <button
+      style={{ width: "-webkit-fill-available" }}
+      onClick={async () => {
+        const payload = detectedCode.text
+
         // const pin = "0000"
         // const date = new Date()
         // const { proof, ...vc } = JSON.parse(JSON.stringify(finalData))
@@ -211,10 +292,10 @@ export default function App() {
 
         // const signedVC = { ...vc, proof: { ...proof, jws: signature } }
 
-        // const { data: encryptedData, error: encryptDataError } =
+        // const { data: encryptedVC, error: encryptVCError } =
         //   nadraDigitalId.encrypt(JSON.stringify(signedVC), pin, date)
 
-        // if (encryptDataError) {
+        // if (encryptVCError) {
         //   toast.error("Failed to encrypt vc")
         //   return
         // }
@@ -235,38 +316,44 @@ export default function App() {
         //   v: "1.0ce",
         //   hash: nadraDigitalId.sha256(pin).data,
         //   date: encryptedDate,
-        //   vc: encryptedData,
+        //   vc: encryptedVC,
         //   fields: [-1],
         // }
 
         // const jsonString = JSON.stringify(objectToEncode)
 
-        const jsonString = JSON.stringify(finalData)
+        // const jsonString = JSON.stringify(encryptedData)
 
-        const { data: encodedData, error: encodeError } =
-          nadraDigitalId.encode(jsonString)
+        // const { data: encodedData, error: encodeError } =
+        //   nadraDigitalId.encode(jsonString)
 
-        if (encodeError) {
-          toast.error("Failed to encode data")
-          return
+        // if (encodeError) {
+        //   toast.error("Failed to encode data")
+        //   return
+        // }
+
+        // payload = encodedData
+
+        const { ECLevel, DataMask, Version } = JSON.parse(detectedCode.extra)
+
+        const creatorOptions = toCreatorOptionsString({
+          DataMask,
+          ECLevel,
+          Version,
+        })
+
+        const options = {
+          scale: 4,
+          format: "QRCode",
+          options: creatorOptions,
         }
 
-        // download QR code as an image
+        console.log("Downloading Encrypted QR Code", { payload, options })
 
-        const options = { format: "QRCode", scale: 4, options: "dataMask=2" }
-
-        const { error, image } = await writeBarcode(encodedData, options)
-
-        if (error) {
-          toast.error("Failed to generate QR code")
-          console.log(error)
-          return
-        }
-
-        downloadBlob(image, "nadra-digital-id-qr-code.png")
+        downloadBarcode(payload, "nadra-digital-id-qr-code.png", options)
       }}
     >
-      Download QR Code
+      Download Encrypted QR Code
     </button>
   )
 
@@ -286,7 +373,32 @@ export default function App() {
             </tr>
             <tr>
               <td>{downloadQRCodeButton}</td>
+              {encryptedData && (
+                <td>
+                  <span style={{ marginRight: "7px" }}>Data Mask</span>
+                  <select
+                    value={qrDataMask}
+                    style={{ fieldSizing: "content" }}
+                    onChange={(e) => setQrDataMask(e.target.value)}
+                  >
+                    <option value="">Auto</option>
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                  </select>
+                </td>
+              )}
             </tr>
+            {encryptedData && (
+              <tr>
+                <td>{downloadEncryptedQRCodeButton}</td>
+              </tr>
+            )}
           </tbody>
         </table>
 
@@ -377,12 +489,14 @@ export default function App() {
             {(() => {
               const fields = Object.values(finalData.credentialSubject)
 
-              const filteredFields =
+              const showAllFields =
                 fullAccess ||
                 !encryptedData?.fields?.length ||
                 encryptedData.fields.includes(-1)
-                  ? fields
-                  : fields.filter((v, i) => encryptedData.fields.includes(i))
+
+              const filteredFields = showAllFields
+                ? fields
+                : fields.filter((v, i) => encryptedData.fields.includes(i))
 
               return filteredFields
                 .filter((f) => f?.label && f?.value)
@@ -711,6 +825,9 @@ export default function App() {
             <td colSpan={2}>{scanAgainButton}</td>
           </tr>
           <tr>
+            <td colSpan={2}>{downloadEncryptedQRCodeButton}</td>
+          </tr>
+          <tr>
             <td colSpan={2}>
               <button
                 onClick={decryptOrShowDocument}
@@ -738,111 +855,133 @@ export default function App() {
         currentDeviceIndex={currentDeviceIndex}
         setCurrentDeviceIndex={setCurrentDeviceIndex}
         onScan={async (detectedCodes) => {
-          const format = detectedCodes[0]?.format
-          const data = detectedCodes[0]?.rawValue || ""
+          const detectedCode = detectedCodes[0]
 
-          if (format === "pdf417") {
-            const decoded = data
-              .trim()
-              .replace(/(.)\x06/g, (m, g) => {
-                const code = g.charCodeAt(0)
-                if (code === 0x0c) return "،"
-                return String.fromCharCode(0x0600 + code)
-              })
-              .split(/[\r\n]+/)
+          if (!detectedCode) return
 
-            function cleanObject(initial = {}) {
-              return Object.fromEntries(
-                Object.entries(initial).filter(([, v]) => v !== undefined),
+          const format = detectedCode.format
+          const data = detectedCode.text || ""
+
+          setDetectedCode(detectedCode)
+
+          decoding: {
+            if (format === "PDF417") {
+              const decoded = data
+                .trim()
+                .replace(/(.)\x06/g, (m, g) => {
+                  const code = g.charCodeAt(0)
+                  if (code === 0x0c) return "،"
+                  return String.fromCharCode(0x0600 + code)
+                })
+                .split(/[\r\n]+/)
+
+              function cleanObject(initial = {}) {
+                return Object.fromEntries(
+                  Object.entries(initial).filter(([k, v]) => v !== undefined),
+                )
+              }
+
+              if (decoded.length < 8 || decoded.length > 9) {
+                break decoding
+              }
+
+              setFinalData(
+                cleanObject(
+                  decoded[2]?.length === 6
+                    ? {
+                        Name: decoded[4],
+                        "Father/Husband Name": decoded[5],
+                        "Identity Number": decoded[1]?.slice(0, 13),
+                        "Family Number": decoded[2],
+                        "Date of Birth": decoded[3],
+                        "Address Line 1": decoded[6],
+                        "Address Line 2": decoded[7],
+                        "Unknown Field 1": decoded[0],
+                      }
+                    : {
+                        Name: decoded[5],
+                        "Father/Husband Name": decoded[6],
+                        "Identity Number": decoded[2]?.slice(0, 13),
+                        "Family Number": decoded[3],
+                        "Date of Birth": decoded[4],
+                        "Address Line 1": decoded[7],
+                        "Address Line 2": decoded[8],
+                        "Unknown Field 1": decoded[0],
+                        "Unknown Field 2": decoded[1],
+                      },
+                ),
               )
+
+              setStep(4)
+              return
             }
 
-            setFinalData(
-              cleanObject(
-                decoded[2].length === 6
-                  ? {
-                      Name: decoded[4],
-                      "Father/Husband Name": decoded[5],
-                      "Identity Number": decoded[1]?.slice(0, 13),
-                      "Family Number": decoded[2],
-                      "Date of Birth": decoded[3],
-                      "Address Line 1": decoded[6],
-                      "Address Line 2": decoded[7],
-                      "Unknown Field 1": decoded[0],
-                    }
-                  : {
-                      Name: decoded[5],
-                      "Father/Husband Name": decoded[6],
-                      "Identity Number": decoded[2]?.slice(0, 13),
-                      "Family Number": decoded[3],
-                      "Date of Birth": decoded[4],
-                      "Address Line 1": decoded[7],
-                      "Address Line 2": decoded[8],
-                      "Unknown Field 1": decoded[0],
-                      "Unknown Field 2": decoded[1],
-                    },
-              ),
-            )
+            if (/^\d+$/.test(data) && data.length === 26) {
+              setFinalData({
+                "Identity Number": data.slice(12, 25),
+                "Card Serial Number": data.slice(0, 12),
+              })
 
-            setStep(4)
+              setStep(4)
+              return
+            }
+
+            const [digits, json] = data.split("\r")
+            let parsedJson = null
+
+            try {
+              parsedJson = JSON.parse(json)
+            } catch (e) {}
+
+            if (/^\d+$/.test(digits) && parsedJson) {
+              setFinalData(parsedJson)
+              setStep(4)
+              return
+            }
+
+            const { data: decoded, error: decodeError } =
+              nadraDigitalId.decode(data)
+
+            if (decodeError) {
+              console.log("Failed to decode data", decodeError)
+              break decoding
+            }
+
+            let decodedObject
+            try {
+              decodedObject = JSON.parse(decoded)
+            } catch (e) {
+              console.log("Failed to parse decoded string", [decoded])
+              break decoding
+            }
+
+            console.log("Decoded Data", decodedObject)
+
+            const isUnencrypted = "credentialSubject" in decodedObject
+
+            if (isUnencrypted) {
+              const { error: verificationError } =
+                await nadraDigitalId.verify(decodedObject)
+
+              setIsDocumentVerified(!verificationError)
+              setFinalData(decodedObject)
+              setStep(3)
+              return
+            }
+
+            setEncryptedData(decodedObject)
+            setStep(1)
             return
           }
 
-          if (/^\d+$/.test(data) && data.length === 26) {
-            setFinalData({
-              "Identity Number": data.slice(12, 25),
-              "Card Serial Number": data.slice(0, 12),
-            })
+          const genericFormatName = genericFormatNames[format]
+          const formatUsedOnDocuments = formatsUsedOnDocuments[format]
 
-            setStep(4)
-            return
-          }
-
-          const [digits, json] = data.split("\r")
-          let parsedJson = null
-
-          try {
-            parsedJson = JSON.parse(json)
-          } catch (e) {}
-
-          if (/^\d+$/.test(digits) && parsedJson) {
-            setFinalData(parsedJson)
-            setStep(4)
-            return
-          }
-
-          const { data: decoded, error: decodeError } =
-            nadraDigitalId.decode(data)
-
-          if (decodeError) {
-            toast.error(decodeError)
-            return
-          }
-
-          let decodedObject
-          try {
-            decodedObject = JSON.parse(decoded)
-          } catch (e) {
-            toast.error("Failed to parse decoded data")
-            return
-          }
-
-          console.log("Decoded Data", decodedObject)
-
-          const isUnencrypted = "credentialSubject" in decodedObject
-
-          if (isUnencrypted) {
-            const { error: verificationError } =
-              await nadraDigitalId.verify(decodedObject)
-
-            setIsDocumentVerified(!verificationError)
-            setFinalData(decodedObject)
-            setStep(3)
-            return
-          }
-
-          setEncryptedData(decodedObject)
-          setStep(1)
+          // prettier-ignore
+          toast.error(
+            "Scanned " + genericFormatName + " is not a valid NADRA " +
+            formatUsedOnDocuments.join(" or ") + " " + genericFormatName
+          )
         }}
       />
     </div>
