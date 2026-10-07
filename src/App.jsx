@@ -87,9 +87,6 @@ const crackingSaltDateRange = signal("")
 const crackingSaltDateStatus = signal("not started")
 
 export default function App() {
-  const [devices, setDevices] = useState(null)
-  const [currentDeviceIndex, setCurrentDeviceIndex] = useState(null)
-
   const [is12HourCycle, _setIs12HourCycle] = useState(() =>
     JSON.parse(localStorage.getItem("is12HourCycle") ?? "true"),
   )
@@ -850,10 +847,6 @@ export default function App() {
       style={{ width: "100dvw", height: "100dvh", background: "black" }}
     >
       <Scanner
-        devices={devices}
-        setDevices={setDevices}
-        currentDeviceIndex={currentDeviceIndex}
-        setCurrentDeviceIndex={setCurrentDeviceIndex}
         onScan={async (detectedCodes) => {
           const detectedCode = detectedCodes[0]
 

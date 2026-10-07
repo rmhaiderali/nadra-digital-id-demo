@@ -1,60 +1,44 @@
 import "webrtc-adapter"
 import { useEffect, useState, useRef } from "react"
 import { Fraction } from "fraction.js"
+import Camera from "./Camera.jsx"
 import Worker from "./worker.js?worker"
 
-screen.orientation ??= {
-  angle: 0,
-  addEventListener: () => {},
-  removeEventListener: () => {},
+function cleanDeviceName(name) {
+  return name?.replace(/[^a-zA-Z0-9]+/g, " ")
 }
 
-function getTrackInfo(track) {
-  const c = track.getCapabilities()
-  return {
-    torch: c.torch,
-    width: c.width.max,
-    height: c.height.max,
-    deviceId: c.deviceId,
-    facingMode: c.facingMode,
-  }
-}
-
-export default function Scanner({
-  devices,
-  setDevices,
-  currentDeviceIndex,
-  setCurrentDeviceIndex,
-  onScan = () => {},
-  scanDelay = 500,
-}) {
+export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
   const videoRef = useRef(null)
   const inputRef = useRef(null)
-  const streamRef = useRef(null)
   const workerRef = useRef(null)
   const [stats, setStats] = useState(false)
   const [torch, setTorch] = useState(false)
   const [disabled, setDisabled] = useState(false)
   const [dimensions, setDimensions] = useState({})
-  const [facingMode, setFacingMode] = useState("environment")
-  const [orientation, setOrientation] = useState(screen.orientation)
+  const [changingDevice, setChangingDevice] = useState(false)
+  const angleRef = useRef(screen.orientation.angle)
 
-  const currentDevice = devices?.[currentDeviceIndex]
+  const [info, setInfo] = useState(null)
+  const [devices, setDevices] = useState([])
+  const [deviceId, setDeviceId] = useState("")
 
-  const isTorchAvailable = currentDevice?.info[0].torch
+  const currentDeviceIndex = devices.findIndex((d) => d.deviceId === deviceId)
+  const currentDevice = devices[currentDeviceIndex]
 
-  const isRotatedSideways = orientation.angle % 180 !== 0
+  const frontCameraRegex = /front|user|Integrated Webcam/i
+
+  const facingMode =
+    info?.facingMode ||
+    (frontCameraRegex.test(currentDevice?.label || "") ? "user" : "environment")
+
+  const isTorchAvailable = info?.torch
 
   useEffect(() => {
     const handleChange = async (event) => {
-      setOrientation(event.target)
-      if (videoRef.current) {
-        await wait(100)
-        const { videoWidth, videoHeight } = videoRef.current
-        if (videoWidth && videoHeight) {
-          setDimensions({ width: videoWidth, height: videoHeight })
-        }
-      }
+      if (angleRef.current % 180 !== event.target.angle % 180)
+        setDimensions(({ width, height }) => ({ width: height, height: width }))
+      angleRef.current = event.target.angle
     }
 
     screen.orientation.addEventListener("change", handleChange)
@@ -64,73 +48,7 @@ export default function Scanner({
     }
   }, [])
 
-  function wait(time) {
-    setDisabled(true)
-    return new Promise(function (resolve) {
-      setTimeout(() => {
-        resolve()
-        setDisabled(false)
-      }, time)
-    })
-  }
-
-  const delay = 300
-
   useEffect(() => {
-    const initialize = async () => {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: { resizeMode: "none", facingMode: "environment" },
-      })
-
-      const devices = await navigator.mediaDevices.enumerateDevices()
-      const videoDevices = devices.filter((d) => d.kind === "videoinput")
-
-      const devicesWithInfo = videoDevices.map((device) => ({ device }))
-
-      const initialDeviceInfo = stream.getVideoTracks().map(getTrackInfo)
-      const initialDeviceId = initialDeviceInfo[0].deviceId
-
-      for (const track of stream.getTracks()) {
-        stream.removeTrack(track)
-        track.stop()
-      }
-      await wait(delay)
-
-      for (const deviceWithInfo of devicesWithInfo) {
-        if (deviceWithInfo.device.deviceId === initialDeviceId) {
-          deviceWithInfo.info = initialDeviceInfo
-          continue
-        }
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: {
-            resizeMode: "none",
-            deviceId: deviceWithInfo.device.deviceId,
-          },
-        })
-
-        deviceWithInfo.info = stream.getVideoTracks().map(getTrackInfo)
-
-        for (const track of stream.getTracks()) {
-          stream.removeTrack(track)
-          track.stop()
-        }
-        await wait(delay)
-      }
-
-      setDevices(devicesWithInfo)
-
-      const indexOfInitialDevice = devicesWithInfo.findIndex(
-        (d) => d.device.deviceId === initialDeviceId,
-      )
-
-      setCurrentDeviceIndex(indexOfInitialDevice)
-    }
-
-    if (!devices && !currentDeviceIndex) initialize()
-
     workerRef.current = new Worker()
 
     workerRef.current.onmessage = (e) => {
@@ -148,88 +66,22 @@ export default function Scanner({
     return async () => {
       clearInterval(intervalId)
       workerRef.current.terminate()
-      if (streamRef.current) {
-        for (const track of streamRef.current.getTracks()) track.stop()
-        await wait(delay)
-      }
     }
   }, [])
 
-  useEffect(() => {
-    async function changeStream() {
-      videoRef.current.srcObject = null
-
-      setFacingMode(
-        (Array.isArray(currentDevice.info[0].facingMode)
-          ? currentDevice.info[0].facingMode[0]
-          : currentDevice.info[0].facingMode) ??
-          (/front|user|Integrated Webcam/i.test(currentDevice.device.label)
-            ? "user"
-            : "environment"),
-      )
-
-      if (streamRef.current) {
-        for (const track of streamRef.current.getTracks()) {
-          streamRef.current.removeTrack(track)
-          track.stop()
-        }
-        await wait(delay)
-      }
-
-      const w = currentDevice.info[0].width
-      const h = currentDevice.info[0].height
-
-      const small = Math.min(w, h)
-      const divisor = small / Math.min(1000, small)
-
-      const width = Math.round(w / divisor)
-      const height = Math.round(h / divisor)
-
-      const options = {
-        audio: false,
-        video: {
-          torch,
-          width,
-          height,
-          resizeMode: "none",
-          deviceId: currentDevice.device.deviceId,
-        },
-      }
-
-      // console.log("Starting camera with options", options)
-
-      const stream = await navigator.mediaDevices.getUserMedia(options)
-
-      streamRef.current = stream
-      videoRef.current.srcObject = stream
-    }
-
-    if (videoRef.current && currentDevice) changeStream()
-  }, [videoRef, currentDevice, torch])
-
-  const isFirefox = /Firefox/i.test(navigator.userAgent)
-  const isAndroid = /Android/i.test(navigator.userAgent)
-
-  const [width, height] =
-    isFirefox && isAndroid && isRotatedSideways
-      ? [dimensions.height, dimensions.width]
-      : [dimensions.width, dimensions.height]
-
+  const { width, height } = dimensions
   const aspectRatio = new Fraction(width, height)
-
-  const manualRotationStyle =
-    isFirefox && isAndroid
-      ? {
-          rotate: -orientation.angle + "deg",
-          scale: isRotatedSideways ? aspectRatio.valueOf() : 1,
-        }
-      : {}
 
   const videoStyles = {
     maxWidth: "100%",
     maxHeight: "100%",
     transform: facingMode === "user" ? "scaleX(-1)" : "none",
   }
+
+  const margin = "4px"
+  const cursor = disabled ? "default" : "pointer"
+  const color = disabled ? "gray" : "#00bfff"
+  const color2 = disabled ? "gray" : "#ffff00cf"
 
   return (
     <div>
@@ -253,13 +105,19 @@ export default function Scanner({
           justifyContent: "center",
         }}
       >
-        <video
-          muted
-          autoPlay
-          playsInline
-          // controls
-          ref={videoRef}
-          style={Object.assign(videoStyles, manualRotationStyle)}
+        <Camera
+          info={info}
+          setInfo={setInfo}
+          torch={torch}
+          setTorch={setTorch}
+          devices={devices}
+          setDevices={setDevices}
+          deviceId={deviceId}
+          setDeviceId={setDeviceId}
+          disabled={disabled}
+          setDisabled={setDisabled}
+          videoRef={videoRef}
+          style={videoStyles}
           onPlay={(e) => {
             const { videoWidth, videoHeight } = e.target
             if (videoWidth && videoHeight) {
@@ -308,66 +166,78 @@ export default function Scanner({
               background: "#000",
               position: "absolute",
               fontFamily: "serif",
-              display: currentDevice && stats ? "block" : "none",
+              display: deviceId && stats ? "block" : "none",
             }}
             onClick={(e) => e.stopPropagation()}
+            onClickCapture={(e) => {
+              if (disabled) e.stopPropagation()
+            }}
           >
             <div>
-              <div style={{ margin: "4px" }}>Facing mode: {facingMode}</div>
-              <div style={{ margin: "4px" }}>
-                Device: {currentDevice?.device.label}
+              <div style={{ margin }}>Facing mode: {facingMode}</div>
+              <div style={{ margin }}>
+                Device: {cleanDeviceName(currentDevice?.label)}
               </div>
-              <div style={{ margin: "4px" }}>
-                Width: {width}, Height: {height}, Ratio:{" "}
+              <div style={{ margin }}>
+                Width: {width} Height: {height} Ratio:{" "}
                 {aspectRatio.toFraction()}
               </div>
+              {isTorchAvailable && (
+                <div
+                  onClick={() => setTorch((prev) => !prev)}
+                  style={{ cursor, margin, color: color2 }}
+                >
+                  {torch ? "Turn off" : "Turn on"} torch
+                </div>
+              )}
               <div
                 onClick={() => {
                   if (disabled && !workerRef.current) return
                   inputRef.current.value = null
                   inputRef.current.click()
                 }}
-                style={{
-                  margin: "4px",
-                  cursor: "pointer",
-                  color: disabled ? "gray" : "#00bfff",
-                }}
+                style={{ color, cursor, margin }}
               >
                 Scan from Image
               </div>
               {devices?.length > 1 && (
-                <div
-                  onClick={() => {
-                    if (disabled) return
-                    setCurrentDeviceIndex((prev) => (prev + 1) % devices.length)
-                  }}
-                  style={{
-                    margin: "4px",
-                    cursor: "pointer",
-                    color: disabled ? "gray" : "#00bfff",
-                  }}
-                >
-                  {"Change to "}
-                  {
-                    devices?.[(currentDeviceIndex + 1) % devices.length]?.device
-                      .label
-                  }
+                <div style={{ margin, gap: "6px", display: "flex" }}>
+                  <div
+                    onClick={() => setChangingDevice(true)}
+                    style={{
+                      color: changingDevice ? "#fff" : color,
+                      cursor: changingDevice ? "default" : cursor,
+                    }}
+                  >
+                    Change Video Device
+                  </div>
+                  {changingDevice && (
+                    <div
+                      onClick={() => setChangingDevice(false)}
+                      style={{ color, cursor }}
+                    >
+                      Cancel
+                    </div>
+                  )}
                 </div>
               )}
-              {isTorchAvailable && (
-                <div
-                  onClick={() => {
-                    if (disabled) return
-                    setTorch((prev) => !prev)
-                  }}
-                  style={{
-                    margin: "4px",
-                    cursor: "pointer",
-                    color: disabled ? "gray" : "#ffff00cf",
-                  }}
-                >
-                  {torch ? "Turn off" : "Turn on"} torch
-                </div>
+              {changingDevice && (
+                <ul style={{ margin, paddingInlineStart: "16px" }}>
+                  {devices
+                    .filter((device) => device.deviceId !== deviceId)
+                    .map((device) => (
+                      <li
+                        key={device.deviceId}
+                        onClick={() => {
+                          setChangingDevice(false)
+                          setDeviceId(device.deviceId)
+                        }}
+                        style={{ color, cursor, margin }}
+                      >
+                        {cleanDeviceName(device.label)}
+                      </li>
+                    ))}
+                </ul>
               )}
             </div>
           </div>
@@ -379,12 +249,12 @@ export default function Scanner({
               textAlign: "center",
               position: "relative",
               background: "#026735",
-              animation: currentDevice
+              animation: deviceId
                 ? "slide 6s ease-in-out infinite alternate"
                 : "none",
             }}
           >
-            {!currentDevice && "Give camera access and reload"}
+            {!deviceId && "Give camera access and reload"}
           </div>
         </div>
       </div>
