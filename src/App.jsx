@@ -842,141 +842,136 @@ export default function App() {
   }
 
   return (
-    <div
-      className="no-margin"
-      style={{ width: "100dvw", height: "100dvh", background: "black" }}
-    >
-      <Scanner
-        onScan={async (detectedCodes) => {
-          const detectedCode = detectedCodes[0]
+    <Scanner
+      onScan={async (detectedCodes) => {
+        const detectedCode = detectedCodes[0]
 
-          if (!detectedCode) return
+        if (!detectedCode) return
 
-          const format = detectedCode.format
-          const data = detectedCode.text || ""
+        const format = detectedCode.format
+        const data = detectedCode.text || ""
 
-          setDetectedCode(detectedCode)
+        setDetectedCode(detectedCode)
 
-          decoding: {
-            if (format === "PDF417") {
-              const decoded = data
-                .trim()
-                .replace(/(.)\x06/g, (m, g) => {
-                  const code = g.charCodeAt(0)
-                  if (code === 0x0c) return "،"
-                  return String.fromCharCode(0x0600 + code)
-                })
-                .split(/[\r\n]+/)
-
-              function cleanObject(initial = {}) {
-                return Object.fromEntries(
-                  Object.entries(initial).filter(([k, v]) => v !== undefined),
-                )
-              }
-
-              if (decoded.length < 8 || decoded.length > 9) {
-                break decoding
-              }
-
-              setFinalData(
-                cleanObject(
-                  decoded[2]?.length === 6
-                    ? {
-                        Name: decoded[4],
-                        "Father/Husband Name": decoded[5],
-                        "Identity Number": decoded[1]?.slice(0, 13),
-                        "Family Number": decoded[2],
-                        "Date of Birth": decoded[3],
-                        "Address Line 1": decoded[6],
-                        "Address Line 2": decoded[7],
-                        "Unknown Field 1": decoded[0],
-                      }
-                    : {
-                        Name: decoded[5],
-                        "Father/Husband Name": decoded[6],
-                        "Identity Number": decoded[2]?.slice(0, 13),
-                        "Family Number": decoded[3],
-                        "Date of Birth": decoded[4],
-                        "Address Line 1": decoded[7],
-                        "Address Line 2": decoded[8],
-                        "Unknown Field 1": decoded[0],
-                        "Unknown Field 2": decoded[1],
-                      },
-                ),
-              )
-
-              setStep(4)
-              return
-            }
-
-            if (/^\d+$/.test(data) && data.length === 26) {
-              setFinalData({
-                "Identity Number": data.slice(12, 25),
-                "Card Serial Number": data.slice(0, 12),
+        decoding: {
+          if (format === "PDF417") {
+            const decoded = data
+              .trim()
+              .replace(/(.)\x06/g, (m, g) => {
+                const code = g.charCodeAt(0)
+                if (code === 0x0c) return "،"
+                return String.fromCharCode(0x0600 + code)
               })
+              .split(/[\r\n]+/)
 
-              setStep(4)
-              return
+            function cleanObject(initial = {}) {
+              return Object.fromEntries(
+                Object.entries(initial).filter(([k, v]) => v !== undefined),
+              )
             }
 
-            const [digits, json] = data.split("\r")
-            let parsedJson = null
-
-            try {
-              parsedJson = JSON.parse(json)
-            } catch (e) {}
-
-            if (/^\d+$/.test(digits) && parsedJson) {
-              setFinalData(parsedJson)
-              setStep(4)
-              return
-            }
-
-            const { data: decoded, error: decodeError } =
-              nadraDigitalId.decode(data)
-
-            if (decodeError) {
-              console.log("Failed to decode data", decodeError)
+            if (decoded.length < 8 || decoded.length > 9) {
               break decoding
             }
 
-            let decodedObject
-            try {
-              decodedObject = JSON.parse(decoded)
-            } catch (e) {
-              console.log("Failed to parse decoded string", [decoded])
-              break decoding
-            }
+            setFinalData(
+              cleanObject(
+                decoded[2]?.length === 6
+                  ? {
+                      Name: decoded[4],
+                      "Father/Husband Name": decoded[5],
+                      "Identity Number": decoded[1]?.slice(0, 13),
+                      "Family Number": decoded[2],
+                      "Date of Birth": decoded[3],
+                      "Address Line 1": decoded[6],
+                      "Address Line 2": decoded[7],
+                      "Unknown Field 1": decoded[0],
+                    }
+                  : {
+                      Name: decoded[5],
+                      "Father/Husband Name": decoded[6],
+                      "Identity Number": decoded[2]?.slice(0, 13),
+                      "Family Number": decoded[3],
+                      "Date of Birth": decoded[4],
+                      "Address Line 1": decoded[7],
+                      "Address Line 2": decoded[8],
+                      "Unknown Field 1": decoded[0],
+                      "Unknown Field 2": decoded[1],
+                    },
+              ),
+            )
 
-            console.log("Decoded Data", decodedObject)
-
-            const isUnencrypted = "credentialSubject" in decodedObject
-
-            if (isUnencrypted) {
-              const { error: verificationError } =
-                await nadraDigitalId.verify(decodedObject)
-
-              setIsDocumentVerified(!verificationError)
-              setFinalData(decodedObject)
-              setStep(3)
-              return
-            }
-
-            setEncryptedData(decodedObject)
-            setStep(1)
+            setStep(4)
             return
           }
 
-          const genericFormatName = genericFormatNames[format]
-          const formatUsedOnDocuments = formatsUsedOnDocuments[format]
+          if (/^\d+$/.test(data) && data.length === 26) {
+            setFinalData({
+              "Identity Number": data.slice(12, 25),
+              "Card Serial Number": data.slice(0, 12),
+            })
 
-          // prettier-ignore
-          toast.error(
-            "Scanned " + genericFormatName + " is not a valid NADRA " +
-            formatUsedOnDocuments.join(" or ") + " " + genericFormatName
-          )
-        }}
-      />
-    </div>
+            setStep(4)
+            return
+          }
+
+          const [digits, json] = data.split("\r")
+          let parsedJson = null
+
+          try {
+            parsedJson = JSON.parse(json)
+          } catch (e) {}
+
+          if (/^\d+$/.test(digits) && parsedJson) {
+            setFinalData(parsedJson)
+            setStep(4)
+            return
+          }
+
+          const { data: decoded, error: decodeError } =
+            nadraDigitalId.decode(data)
+
+          if (decodeError) {
+            console.log("Failed to decode data", decodeError)
+            break decoding
+          }
+
+          let decodedObject
+          try {
+            decodedObject = JSON.parse(decoded)
+          } catch (e) {
+            console.log("Failed to parse decoded string", [decoded])
+            break decoding
+          }
+
+          console.log("Decoded Data", decodedObject)
+
+          const isUnencrypted = "credentialSubject" in decodedObject
+
+          if (isUnencrypted) {
+            const { error: verificationError } =
+              await nadraDigitalId.verify(decodedObject)
+
+            setIsDocumentVerified(!verificationError)
+            setFinalData(decodedObject)
+            setStep(3)
+            return
+          }
+
+          setEncryptedData(decodedObject)
+          setStep(1)
+          return
+        }
+
+        const genericFormatName = genericFormatNames[format]
+        const formatUsedOnDocuments = formatsUsedOnDocuments[format]
+
+        // prettier-ignore
+        toast.error(
+          "Scanned " + genericFormatName + " is not a valid NADRA " +
+          formatUsedOnDocuments.join(" or ") + " " + genericFormatName
+        )
+      }}
+    />
   )
 }

@@ -4,6 +4,12 @@ import { Fraction } from "fraction.js"
 import Camera from "./Camera.jsx"
 import Worker from "./worker.js?worker"
 
+screen.orientation ??= {
+  angle: 0,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+}
+
 function cleanDeviceName(name) {
   return name?.replace(/[^a-zA-Z0-9]+/g, " ")
 }
@@ -17,6 +23,7 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
   const [disabled, setDisabled] = useState(false)
   const [dimensions, setDimensions] = useState({})
   const [changingDevice, setChangingDevice] = useState(false)
+  const [haveVideoDevices, setHaveVideoDevices] = useState(null)
   const angleRef = useRef(screen.orientation.angle)
 
   const [info, setInfo] = useState(null)
@@ -35,16 +42,23 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
   const isTorchAvailable = info?.torch
 
   useEffect(() => {
-    const handleChange = async (event) => {
+    async function checkHasVideoDevices() {
+      const newDevices = await navigator.mediaDevices?.enumerateDevices?.()
+      setHaveVideoDevices(!!newDevices?.some((d) => d.kind === "videoinput"))
+    }
+
+    checkHasVideoDevices()
+
+    async function handleOrientation(event) {
       if (angleRef.current % 180 !== event.target.angle % 180)
         setDimensions(({ width, height }) => ({ width: height, height: width }))
       angleRef.current = event.target.angle
     }
 
-    screen.orientation.addEventListener("change", handleChange)
+    screen.orientation.addEventListener("change", handleOrientation)
 
     return () => {
-      screen.orientation.removeEventListener("change", handleChange)
+      screen.orientation.removeEventListener("change", handleOrientation)
     }
   }, [])
 
@@ -84,7 +98,7 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
   const color2 = disabled ? "gray" : "#ffff00cf"
 
   return (
-    <div>
+    <>
       <input
         type="file"
         ref={inputRef}
@@ -97,167 +111,190 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
           workerRef.current.postMessage(bitmap, [bitmap])
         }}
       />
-      <div
-        style={{
-          display: "flex",
-          height: "100dvh",
-          background: "black",
-          justifyContent: "center",
-        }}
-      >
-        <Camera
-          info={info}
-          setInfo={setInfo}
-          torch={torch}
-          setTorch={setTorch}
-          devices={devices}
-          setDevices={setDevices}
-          deviceId={deviceId}
-          setDeviceId={setDeviceId}
-          disabled={disabled}
-          setDisabled={setDisabled}
-          videoRef={videoRef}
-          style={videoStyles}
-          onPlay={(e) => {
-            const { videoWidth, videoHeight } = e.target
-            if (videoWidth && videoHeight) {
-              setDimensions({ width: videoWidth, height: videoHeight })
-            }
-          }}
-        />
-      </div>
-      <div
-        style={{
-          inset: 0,
-          height: "100dvh",
-          position: "absolute",
-          alignContent: "center",
-          justifyContent: "center",
-        }}
-      >
+      {haveVideoDevices === true && (
         <div
-          style={{
-            margin: "auto",
-            maxWidth: "100%",
-            maxHeight: "100%",
-            aspectRatio: aspectRatio.toFraction(),
-          }}
-          onClick={() => setStats((s) => !s)}
-          onDrop={async (e) => {
-            e.preventDefault()
-            const files = Array.from(e.dataTransfer.files)
-            console.log("Dropped Files", files)
-
-            const imageFiles = files.filter((f) => f.type.startsWith("image/"))
-            console.log("Dropped Image Files", imageFiles)
-
-            const bitmapImages = await Promise.all(
-              imageFiles.map((imageFile) => createImageBitmap(imageFile)),
-            )
-
-            workerRef.current.postMessage(bitmapImages, bitmapImages)
-          }}
-          onDragOver={(e) => e.preventDefault()}
+          className="no-margin"
+          style={{ width: "100dvw", height: "100dvh", background: "black" }}
         >
           <div
-            className="whitespace-nowrap"
             style={{
-              color: "white",
-              background: "#000",
-              position: "absolute",
-              fontFamily: "serif",
-              display: deviceId && stats ? "block" : "none",
-            }}
-            onClick={(e) => e.stopPropagation()}
-            onClickCapture={(e) => {
-              if (disabled) e.stopPropagation()
+              display: "flex",
+              height: "100dvh",
+              background: "black",
+              justifyContent: "center",
             }}
           >
-            <div>
-              <div style={{ margin }}>Facing mode: {facingMode}</div>
-              <div style={{ margin }}>
-                Device: {cleanDeviceName(currentDevice?.label)}
-              </div>
-              <div style={{ margin }}>
-                Width: {width} Height: {height} Ratio:{" "}
-                {aspectRatio.toFraction()}
-              </div>
-              {isTorchAvailable && (
-                <div
-                  onClick={() => setTorch((prev) => !prev)}
-                  style={{ cursor, margin, color: color2 }}
-                >
-                  {torch ? "Turn off" : "Turn on"} torch
-                </div>
-              )}
-              <div
-                onClick={() => {
-                  if (disabled && !workerRef.current) return
-                  inputRef.current.value = null
-                  inputRef.current.click()
-                }}
-                style={{ color, cursor, margin }}
-              >
-                Scan from Image
-              </div>
-              {devices?.length > 1 && (
-                <div style={{ margin, gap: "6px", display: "flex" }}>
-                  <div
-                    onClick={() => setChangingDevice(true)}
-                    style={{
-                      color: changingDevice ? "#fff" : color,
-                      cursor: changingDevice ? "default" : cursor,
-                    }}
-                  >
-                    Change Video Device
-                  </div>
-                  {changingDevice && (
-                    <div
-                      onClick={() => setChangingDevice(false)}
-                      style={{ color, cursor }}
-                    >
-                      Cancel
-                    </div>
-                  )}
-                </div>
-              )}
-              {changingDevice && (
-                <ul style={{ margin, paddingInlineStart: "16px" }}>
-                  {devices
-                    .filter((device) => device.deviceId !== deviceId)
-                    .map((device) => (
-                      <li
-                        key={device.deviceId}
-                        onClick={() => {
-                          setChangingDevice(false)
-                          setDeviceId(device.deviceId)
-                        }}
-                        style={{ color, cursor, margin }}
-                      >
-                        {cleanDeviceName(device.label)}
-                      </li>
-                    ))}
-                </ul>
-              )}
-            </div>
+            <Camera
+              info={info}
+              setInfo={setInfo}
+              torch={torch}
+              setTorch={setTorch}
+              devices={devices}
+              setDevices={setDevices}
+              deviceId={deviceId}
+              setDeviceId={setDeviceId}
+              disabled={disabled}
+              setDisabled={setDisabled}
+              videoRef={videoRef}
+              style={videoStyles}
+              onPlay={(e) => {
+                const { videoWidth, videoHeight } = e.target
+                if (videoWidth && videoHeight) {
+                  setDimensions({ width: videoWidth, height: videoHeight })
+                }
+              }}
+            />
           </div>
           <div
             style={{
-              width: "100%",
-              color: "white",
-              minHeight: "3px",
-              textAlign: "center",
-              position: "relative",
-              background: "#026735",
-              animation: deviceId
-                ? "slide 6s ease-in-out infinite alternate"
-                : "none",
+              inset: 0,
+              height: "100dvh",
+              position: "absolute",
+              alignContent: "center",
+              justifyContent: "center",
             }}
           >
-            {!deviceId && "Give camera access and reload"}
+            <div
+              style={{
+                margin: "auto",
+                maxWidth: "100%",
+                maxHeight: "100%",
+                aspectRatio: aspectRatio.toFraction(),
+              }}
+              onClick={() => setStats((s) => !s)}
+              onDrop={async (e) => {
+                e.preventDefault()
+                const files = Array.from(e.dataTransfer.files)
+                console.log("Dropped Files", files)
+
+                const imageFiles = files.filter((f) =>
+                  f.type.startsWith("image/"),
+                )
+                console.log("Dropped Image Files", imageFiles)
+
+                const bitmapImages = await Promise.all(
+                  imageFiles.map((imageFile) => createImageBitmap(imageFile)),
+                )
+
+                workerRef.current.postMessage(bitmapImages, bitmapImages)
+              }}
+              onDragOver={(e) => e.preventDefault()}
+            >
+              <div
+                className="whitespace-nowrap"
+                style={{
+                  color: "white",
+                  background: "#000",
+                  position: "absolute",
+                  fontFamily: "serif",
+                  display: deviceId && stats ? "block" : "none",
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onClickCapture={(e) => {
+                  if (disabled) e.stopPropagation()
+                }}
+              >
+                <div>
+                  <div style={{ margin }}>Facing mode: {facingMode}</div>
+                  <div style={{ margin }}>
+                    Device: {cleanDeviceName(currentDevice?.label)}
+                  </div>
+                  <div style={{ margin }}>
+                    Width: {width} Height: {height} Ratio:{" "}
+                    {aspectRatio.toFraction()}
+                  </div>
+                  {isTorchAvailable && (
+                    <div
+                      onClick={() => setTorch((prev) => !prev)}
+                      style={{ cursor, margin, color: color2 }}
+                    >
+                      {torch ? "Turn off" : "Turn on"} torch
+                    </div>
+                  )}
+                  <div
+                    onClick={() => {
+                      if (disabled && !workerRef.current) return
+                      inputRef.current.value = null
+                      inputRef.current.click()
+                    }}
+                    style={{ color, cursor, margin }}
+                  >
+                    Scan from Image
+                  </div>
+                  {devices?.length > 1 && (
+                    <div style={{ margin, gap: "6px", display: "flex" }}>
+                      <div
+                        onClick={() => setChangingDevice(true)}
+                        style={{
+                          color: changingDevice ? "#fff" : color,
+                          cursor: changingDevice ? "default" : cursor,
+                        }}
+                      >
+                        Change Video Device
+                      </div>
+                      {changingDevice && (
+                        <div
+                          onClick={() => setChangingDevice(false)}
+                          style={{ color, cursor }}
+                        >
+                          Cancel
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {changingDevice && (
+                    <ul style={{ margin, paddingInlineStart: "16px" }}>
+                      {devices
+                        .filter((device) => device.deviceId !== deviceId)
+                        .map((device) => (
+                          <li
+                            key={device.deviceId}
+                            onClick={() => {
+                              setChangingDevice(false)
+                              setDeviceId(device.deviceId)
+                            }}
+                            style={{ color, cursor, margin }}
+                          >
+                            {cleanDeviceName(device.label)}
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+              <div
+                style={{
+                  width: "100%",
+                  color: "white",
+                  minHeight: "3px",
+                  textAlign: "center",
+                  position: "relative",
+                  background: "#026735",
+                  animation: deviceId
+                    ? "slide 6s ease-in-out infinite alternate"
+                    : "none",
+                }}
+              >
+                {!deviceId && "Give camera access and reload"}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      )}
+      {haveVideoDevices === false && (
+        <div>
+          No video devices found{" "}
+          <button
+            onClick={() => {
+              if (!workerRef.current) return
+              inputRef.current.value = null
+              inputRef.current.click()
+            }}
+          >
+            Scan from Image
+          </button>
+        </div>
+      )}
+    </>
   )
 }
