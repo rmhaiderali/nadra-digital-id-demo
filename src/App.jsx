@@ -16,7 +16,7 @@ import crackSaltDate from "./utils/crackSaltDateAndDecrypt.js"
 const filePaths = { "zxing_writer.wasm": zxingWriterWasmUrl }
 
 prepareZXingModule({
-  overrides: { locateFile: (path, prefix) => filePaths[path] ?? path + prefix },
+  overrides: { locateFile: (path) => filePaths[path] },
 })
 
 const dateDelimiter =
