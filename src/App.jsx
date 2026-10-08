@@ -142,7 +142,7 @@ export default function App() {
   }
 
   const scanAgainButton = (
-    <button onClick={scanAgain} style={{ width: "-webkit-fill-available" }}>
+    <button onClick={scanAgain} className="w-full">
       Scan Again
     </button>
   )
@@ -153,7 +153,7 @@ export default function App() {
   }
 
   const copyAsJsonButton = (
-    <button onClick={copyAsJson} style={{ width: "-webkit-fill-available" }}>
+    <button onClick={copyAsJson} className="w-full">
       Copy as JSON
     </button>
   )
@@ -212,17 +212,14 @@ export default function App() {
   }
 
   const toggleHourCycleButton = (
-    <button
-      style={{ width: "-webkit-fill-available" }}
-      onClick={() => setIs12HourCycle(!is12HourCycle)}
-    >
+    <button className="w-full" onClick={() => setIs12HourCycle(!is12HourCycle)}>
       Use {is12HourCycle ? "24h" : "12h"} Time Format
     </button>
   )
 
   const downloadQRCodeButton = (
     <button
-      style={{ width: "-webkit-fill-available" }}
+      className="w-full"
       onClick={async () => {
         let payload = detectedCode.text
 
@@ -269,7 +266,7 @@ export default function App() {
 
   const downloadEncryptedQRCodeButton = (
     <button
-      style={{ width: "-webkit-fill-available" }}
+      className="w-full"
       onClick={async () => {
         const payload = detectedCode.text
 
@@ -675,7 +672,7 @@ export default function App() {
                 type="number"
                 placeholder="Enter PIN"
                 onChange={(e) => setPin(e.target.value)}
-                style={{ width: "-webkit-fill-available" }}
+                className="w-full"
               />
             </td>
             {fullAccess && (
@@ -728,7 +725,7 @@ export default function App() {
               <input
                 type="date"
                 value={saltDate}
-                style={{ width: "-webkit-fill-available" }}
+                className="w-full"
                 onChange={(e) => setSaltDate(e.target.value)}
               />
             </td>
@@ -826,10 +823,7 @@ export default function App() {
           </tr>
           <tr>
             <td colSpan={2}>
-              <button
-                onClick={decryptOrShowDocument}
-                style={{ width: "-webkit-fill-available" }}
-              >
+              <button onClick={decryptOrShowDocument} className="w-full">
                 {crackingSaltDateStatus.value === "cracked"
                   ? "Show Document"
                   : "Decrypt"}

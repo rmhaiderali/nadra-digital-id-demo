@@ -1,6 +1,7 @@
 import "webrtc-adapter"
-import { useEffect, useState, useRef } from "react"
 import { Fraction } from "fraction.js"
+import { useEffect, useState, useRef } from "react"
+import { getImageDataOrBlobFromImageBitmapSource } from "./barcode-detector/utils"
 import Camera from "./Camera.jsx"
 import Worker from "./worker.js?worker"
 
@@ -73,7 +74,9 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
     const intervalId = setInterval(async () => {
       if (videoRef.current && videoRef.current.readyState === 4 && !disabled) {
         const bitmap = await createImageBitmap(videoRef.current)
-        workerRef.current.postMessage(bitmap, [bitmap])
+        const imageData = await getImageDataOrBlobFromImageBitmapSource(bitmap)
+        if (!imageData) return
+        workerRef.current.postMessage(imageData, [imageData.data.buffer])
       }
     }, scanDelay)
 
@@ -108,7 +111,9 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
           const file = e.target.files[0]
           if (!file && !workerRef.current) return
           const bitmap = await createImageBitmap(file)
-          workerRef.current.postMessage(bitmap, [bitmap])
+          const imageData = await getImageDataOrBlobFromImageBitmapSource(bitmap)
+          if (!imageData) return
+          workerRef.current.postMessage(imageData, [imageData.data.buffer])
         }}
       />
       {haveVideoDevices === true && (

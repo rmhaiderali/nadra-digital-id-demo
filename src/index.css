@@ -2,6 +2,10 @@ html {
   color-scheme: light dark;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 body:has(.no-margin) {
   margin: 0;
 }
@@ -67,4 +71,8 @@ table {
 
 .Toastify__toast {
   padding-right: 24px !important;
+}
+
+.w-full {
+  width: 100%;
 }
