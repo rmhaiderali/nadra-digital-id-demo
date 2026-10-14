@@ -65,19 +65,18 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
     }
   }, [])
 
-  async function sendImageToWorker(bitmap) {
-    if (workerFeatures.current.offscreenCanvas)
-      return workerRef.current.postMessage(bitmap, [bitmap])
+  async function bitmapToSendable(bitmap) {
+    if (workerFeatures.current.offscreenCanvas) return [bitmap, bitmap]
 
     const result = await getImageDataOrBlobFromImageBitmapSource(bitmap)
 
-    if (result instanceof Blob)
-      return workerRef.current.postMessage(result, [result])
+    if (result instanceof Blob) return [result, result]
 
-    if (result instanceof ImageData)
-      return workerRef.current.postMessage(result, [result.data.buffer])
+    if (result instanceof ImageData) return [result, result.data.buffer]
 
     console.log("Failed to convert ImageBitmap to ImageData or Blob")
+
+    return null
   }
 
   useEffect(() => {
@@ -97,8 +96,13 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
     }
 
     const intervalId = setInterval(async () => {
-      if (videoRef.current && videoRef.current.readyState === 4 && !disabled)
-        await sendImageToWorker(await createImageBitmap(videoRef.current))
+      if (videoRef.current && videoRef.current.readyState === 4 && !disabled) {
+        const bitmap = await createImageBitmap(videoRef.current)
+        const sendable = await bitmapToSendable(bitmap)
+        if (!sendable) return
+        const [message, transfer] = sendable
+        workerRef.current.postMessage(message, [transfer])
+      }
     }, scanDelay)
 
     return async () => {
@@ -121,6 +125,28 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
   const color = disabled ? "gray" : "#00bfff"
   const color2 = disabled ? "gray" : "#ffff00cf"
 
+  async function handleSelectedFiles(fileList) {
+    const files = Array.from(fileList)
+    console.log("Selected Files", files)
+
+    const images = files.filter((f) => f.type.startsWith("image/"))
+    console.log("Selected Images", images)
+
+    const sendables = await Promise.all(
+      images.map(async (image) => {
+        const bitmap = await createImageBitmap(image)
+        return await bitmapToSendable(bitmap)
+      }),
+    )
+
+    const trueSendables = sendables.filter((s) => s)
+
+    const message = trueSendables.map((s) => s[0])
+    const transfer = trueSendables.map((s) => s[1])
+
+    workerRef.current.postMessage(message, transfer)
+  }
+
   return (
     <>
       <input
@@ -128,11 +154,7 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
         ref={inputRef}
         accept="image/*"
         style={{ display: "none" }}
-        onChange={async (e) => {
-          const file = e.target.files[0]
-          if (!file && !workerRef.current) return
-          await sendImageToWorker(await createImageBitmap(file))
-        }}
+        onChange={(e) => handleSelectedFiles(e.target.files)}
       />
       {haveVideoDevices === true && (
         <div
@@ -185,21 +207,9 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
                 aspectRatio: aspectRatio.toFraction(),
               }}
               onClick={() => setStats((s) => !s)}
-              onDrop={async (e) => {
+              onDrop={(e) => {
                 e.preventDefault()
-                const files = Array.from(e.dataTransfer.files)
-                console.log("Dropped Files", files)
-
-                const imageFiles = files.filter((f) =>
-                  f.type.startsWith("image/"),
-                )
-                console.log("Dropped Image Files", imageFiles)
-
-                const bitmapImages = await Promise.all(
-                  imageFiles.map((imageFile) => createImageBitmap(imageFile)),
-                )
-
-                workerRef.current.postMessage(bitmapImages, bitmapImages)
+                handleSelectedFiles(e.dataTransfer.files)
               }}
               onDragOver={(e) => e.preventDefault()}
             >
