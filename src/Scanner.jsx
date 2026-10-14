@@ -3,7 +3,8 @@ import { Fraction } from "fraction.js"
 import { useEffect, useState, useRef } from "react"
 import { getImageDataOrBlobFromImageBitmapSource } from "./barcode-detector/utils"
 import Camera from "./Camera.jsx"
-import Worker from "./worker.js?worker"
+import Worker from "./workers/scanner.js?worker"
+import FeatureCheckWorker from "./workers/feature-check.js?worker"
 
 screen.orientation ??= {
   angle: 0,
@@ -19,6 +20,7 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
   const videoRef = useRef(null)
   const inputRef = useRef(null)
   const workerRef = useRef(null)
+  const workerFeatures = useRef({})
   const [stats, setStats] = useState(false)
   const [torch, setTorch] = useState(false)
   const [disabled, setDisabled] = useState(false)
@@ -63,7 +65,30 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
     }
   }, [])
 
+  async function sendImageToWorker(bitmap) {
+    if (workerFeatures.current.offscreenCanvas)
+      return workerRef.current.postMessage(bitmap, [bitmap])
+
+    const result = await getImageDataOrBlobFromImageBitmapSource(bitmap)
+
+    if (result instanceof Blob)
+      return workerRef.current.postMessage(result, [result])
+
+    if (result instanceof ImageData)
+      return workerRef.current.postMessage(result, [result.data.buffer])
+
+    console.log("Failed to convert ImageBitmap to ImageData or Blob")
+  }
+
   useEffect(() => {
+    const featureCheckWorker = new FeatureCheckWorker()
+
+    featureCheckWorker.onmessage = (e) => {
+      console.log("Worker Features", e.data)
+      workerFeatures.current = e.data
+      featureCheckWorker.terminate()
+    }
+
     workerRef.current = new Worker()
 
     workerRef.current.onmessage = (e) => {
@@ -72,12 +97,8 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
     }
 
     const intervalId = setInterval(async () => {
-      if (videoRef.current && videoRef.current.readyState === 4 && !disabled) {
-        const bitmap = await createImageBitmap(videoRef.current)
-        const imageData = await getImageDataOrBlobFromImageBitmapSource(bitmap)
-        if (!imageData) return
-        workerRef.current.postMessage(imageData, [imageData.data.buffer])
-      }
+      if (videoRef.current && videoRef.current.readyState === 4 && !disabled)
+        await sendImageToWorker(await createImageBitmap(videoRef.current))
     }, scanDelay)
 
     return async () => {
@@ -110,10 +131,7 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
         onChange={async (e) => {
           const file = e.target.files[0]
           if (!file && !workerRef.current) return
-          const bitmap = await createImageBitmap(file)
-          const imageData = await getImageDataOrBlobFromImageBitmapSource(bitmap)
-          if (!imageData) return
-          workerRef.current.postMessage(imageData, [imageData.data.buffer])
+          await sendImageToWorker(await createImageBitmap(file))
         }}
       />
       {haveVideoDevices === true && (

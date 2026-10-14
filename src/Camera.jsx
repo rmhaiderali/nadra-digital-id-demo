@@ -27,7 +27,7 @@ function getTrackInfo(track) {
   }
 }
 
-export default function App({
+export default function Camera({
   info,
   setInfo,
   torch,
