@@ -1,0 +1,1 @@
+(function(){let e=typeof OffscreenCanvas<`u`;self.postMessage({offscreenCanvas:e})})();
