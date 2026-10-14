@@ -27,17 +27,17 @@ self.onmessage = async (e) => {
 
       if (!isValidImageData(image) && !isValidImageBitmap(image)) continue
 
-      const result =
+      const imageDataOrBlob =
         image instanceof ImageBitmap
           ? await getImageDataOrBlobFromImageBitmapSource(image)
           : image
 
-      if (!result) {
+      if (!imageDataOrBlob) {
         console.log("Failed to convert ImageBitmap to ImageData or Blob")
         continue
       }
 
-      const barCodes = await readBarcodes(result, readerOptions)
+      const barCodes = await readBarcodes(imageDataOrBlob, readerOptions)
 
       for (const barCode of barCodes) {
         barCode.imageIndex = i
