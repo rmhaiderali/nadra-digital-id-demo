@@ -268,23 +268,38 @@ export default function App() {
     <button
       className="w-full"
       onClick={async () => {
-        const payload = detectedCode.text
+        let payload = detectedCode.text
 
         // const pin = "0000"
         // const date = new Date()
+
+        // if (!finalData) {
+        //   toast.error("Decrypted data first before encrypting")
+        //   return
+        // }
+
         // const { proof, ...vc } = JSON.parse(JSON.stringify(finalData))
 
-        // date.setHours(0, 0, 0, 0)
+        // date.setMinutes(0, 0, 0)
+
+        // const privateKeyPem = nadraDigitalId.keys.private.RSA.TEST
+        // const algorithm = "RS256"
+        // const type = "RsaSignature2018"
+
+        // const privateKeyPem = nadraDigitalId.keys.private.Ed25519.TEST
+        // const algorithm = "Ed25519"
+        // const type = "Ed25519Signature2018"
 
         // const { data: signature, error: signingError } =
-        //   await nadraDigitalId.sign(vc)
+        //   await nadraDigitalId.sign(vc, { privateKeyPem, algorithm })
 
         // if (signingError) {
+        //   console.log(signingError)
         //   toast.error("Failed to sign vc")
         //   return
         // }
 
-        // const signedVC = { ...vc, proof: { ...proof, jws: signature } }
+        // const signedVC = { ...vc, proof: { ...proof, jws: signature, type } }
 
         // const { data: encryptedVC, error: encryptVCError } =
         //   nadraDigitalId.encrypt(JSON.stringify(signedVC), pin, date)
@@ -307,16 +322,16 @@ export default function App() {
         // }
 
         // const objectToEncode = {
-        //   v: "1.0ce",
-        //   hash: nadraDigitalId.sha256(pin).data,
+        //   v: "1.2ce",
+        //   hash: nadraDigitalId.sha2.sha384(pin).toHex(),
         //   date: encryptedDate,
         //   vc: encryptedVC,
         //   fields: [-1],
         // }
 
-        // const jsonString = JSON.stringify(objectToEncode)
-
         // const jsonString = JSON.stringify(encryptedData)
+        // const jsonString = JSON.stringify(signedVC)
+        // const jsonString = JSON.stringify(objectToEncode)
 
         // const { data: encodedData, error: encodeError } =
         //   nadraDigitalId.encode(jsonString)
@@ -439,7 +454,10 @@ export default function App() {
                   <strong>Issuance Date:</strong>
                 </td>
                 <td>
-                  {DateTime.fromISO(finalData.issuanceDate).toFormat(
+                  {(finalData.issuanceDate.seconds
+                    ? DateTime.fromSeconds(finalData.issuanceDate.seconds)
+                    : DateTime.fromISO(finalData.issuanceDate)
+                  ).toFormat(
                     dateFormat + (is12HourCycle ? " hh:mm a" : " HH:mm"),
                   )}
                 </td>
@@ -451,7 +469,10 @@ export default function App() {
                   <strong>Expiration Date:</strong>
                 </td>
                 <td>
-                  {DateTime.fromISO(finalData.expirationDate).toFormat(
+                  {(finalData.expirationDate.seconds
+                    ? DateTime.fromSeconds(finalData.expirationDate.seconds)
+                    : DateTime.fromISO(finalData.expirationDate)
+                  ).toFormat(
                     dateFormat + (is12HourCycle ? " hh:mm a" : " HH:mm"),
                   )}
                 </td>
@@ -481,37 +502,38 @@ export default function App() {
             <Heading>Document Data:</Heading>
 
             {(() => {
-              const fields = Object.values(finalData.credentialSubject)
+              const fields = Object.values(finalData.credentialSubject).filter(
+                (f) => f?.label && f?.value,
+              )
 
               const showAllFields =
                 fullAccess ||
                 !encryptedData?.fields?.length ||
                 encryptedData.fields.includes(-1)
 
-              const filteredFields = showAllFields
+              const fieldsToShow = showAllFields
                 ? fields
-                : fields.filter((v, i) => encryptedData.fields.includes(i))
+                : fields.filter((f, i) => encryptedData.fields.includes(i))
 
-              return filteredFields
-                .filter((f) => f?.label && f?.value)
-                .map((f) => {
-                  const normalizedText =
-                    nadraDigitalId.normalizeText(f.value).data || f.value
-                  return (
-                    <tr key={f.label}>
-                      <td>
-                        <strong>{f.label}:</strong>
-                      </td>
-                      <td
-                        className={
-                          normalizedText.match(/[\u0600-\u06FF]/) ? "rtl" : ""
-                        }
-                      >
-                        {normalizedText}
-                      </td>
-                    </tr>
-                  )
-                })
+              return fieldsToShow.map((f) => {
+                const normalizedText =
+                  nadraDigitalId.normalizeText(f.value).data || f.value
+
+                return (
+                  <tr key={f.label}>
+                    <td>
+                      <strong>{f.label}:</strong>
+                    </td>
+                    <td
+                      className={
+                        normalizedText.match(/[\u0600-\u06FF]/) ? "rtl" : ""
+                      }
+                    >
+                      {normalizedText}
+                    </td>
+                  </tr>
+                )
+              })
             })()}
           </tbody>
         </table>

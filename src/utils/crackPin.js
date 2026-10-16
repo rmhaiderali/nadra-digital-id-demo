@@ -41,12 +41,7 @@ export default async function crackPin(
       pinsToTest.push(i.toString().padStart(6, "0"))
 
       for (const pinToTest of pinsToTest) {
-        const { data: possiblePinHash, error: possiblePinHashError } =
-          hashFunction.fn(pinToTest)
-
-        if (possiblePinHashError) {
-          return { error: "Error hashing PIN:" + possiblePinHashError }
-        }
+        const possiblePinHash = hashFunction.fn(pinToTest).toHex()
 
         if (encryptedData.hash === possiblePinHash) {
           return { data: pinToTest }

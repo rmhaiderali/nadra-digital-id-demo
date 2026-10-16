@@ -16,12 +16,7 @@ export default async function matchPin(encryptedData, pinToTest) {
     return { error: "Not valid " + hashFunction.name + " hash" }
   }
 
-  const { data: possiblePinHash, error: possiblePinHashError } =
-    hashFunction.fn(pinToTest)
-
-  if (possiblePinHashError) {
-    return { error: "Error hashing PIN:" + possiblePinHashError }
-  }
+  const possiblePinHash = hashFunction.fn(pinToTest).toHex()
 
   if (encryptedData.hash === possiblePinHash) {
     return { match: true }
