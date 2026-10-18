@@ -19,7 +19,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "fraction.js": "^5.3.4",
     "gh-pages": "^6.3.0",
-    "nadra-digital-id": "^0.4.0",
+    "nadra-digital-id": "^0.4.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-toastify": "^11.1.0",
