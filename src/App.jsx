@@ -579,7 +579,6 @@ export default function App() {
 
     if (aborted) {
       crackedPin.value = ""
-      crackingPinStatus.value = "not started"
       toast.info("Cracking PIN Aborted")
     }
 
@@ -616,7 +615,6 @@ export default function App() {
 
     if (aborted) {
       crackedSaltDate.value = ""
-      crackingSaltDateStatus.value = "not started"
       toast.info("Cracking Creation Date Aborted")
     }
 
@@ -713,6 +711,13 @@ export default function App() {
                     >
                       <Loading />
                       <span>Cracking Range {crackingPinRange}</span>
+                      <button
+                        onClick={() => {
+                          crackingPinStatus.value = "not started"
+                        }}
+                      >
+                        Stop
+                      </button>
                     </div>
                   </>
                 )}
@@ -796,8 +801,6 @@ export default function App() {
                     </button>
                     <button
                       onClick={() => {
-                        setCrackSaltDateStart("")
-                        setCrackSaltDateEnd("")
                         crackingSaltDateStatus.value = "not started"
                       }}
                     >
@@ -816,6 +819,13 @@ export default function App() {
                     >
                       <Loading />
                       <span>Cracking with {crackingSaltDateRange}</span>
+                      <button
+                        onClick={() => {
+                          crackingSaltDateStatus.value = "select range"
+                        }}
+                      >
+                        Stop
+                      </button>
                     </div>
                   </>
                 )}
