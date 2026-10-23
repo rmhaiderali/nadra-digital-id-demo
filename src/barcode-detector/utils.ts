@@ -1,3 +1,6 @@
+// https://github.com/Sec-ant/barcode-detector/blob/818194e/src/utils.ts
+// Repace commit identifier with "main" to get the latest version of this file
+
 import type {
   ReadInputBarcodeFormat,
   ReadOutputBarcodeFormat,
@@ -386,8 +389,13 @@ async function getImageDataOrBlobFromBlob(
       );
     }
   }
-  const imageData = await getImageDataFromCanvasImageSource(imageSource);
-  return imageData;
+  try {
+    return await getImageDataFromCanvasImageSource(imageSource);
+  } finally {
+    if (isImageBitmap(imageSource)) {
+      imageSource.close();
+    }
+  }
 }
 
 function getImageDataFromCanvas(
