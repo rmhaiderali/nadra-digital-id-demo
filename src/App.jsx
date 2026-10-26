@@ -174,7 +174,7 @@ export default function App() {
       className="w-full"
       onClick={async () => {
         if (detectedCode?.format === "PDF417") {
-          const options = { scale: 4 }
+          const options = { scale: 4, rowRepeat: 2 }
 
           const image = generatePDF417Barcode(detectedCode.bytes, options)
 
