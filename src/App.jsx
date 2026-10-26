@@ -5,6 +5,7 @@ import { useState, useEffect } from "react"
 import nadraDigitalId from "nadra-digital-id"
 import { writeBarcode, prepareZXingModule } from "zxing-wasm/writer"
 import zxingWriterWasmUrl from "/node_modules/zxing-wasm/dist/writer/zxing_writer.wasm?url"
+import { generateBarcode as generatePDF417Barcode } from "retro-pdf417"
 import Scanner from "./Scanner.jsx"
 import Loading from "./Loading.jsx"
 import crackPin from "./utils/crackPin.js"
@@ -168,6 +169,25 @@ export default function App() {
     )
   }
 
+  const downloadBarcodeButton = (
+    <button
+      className="w-full"
+      onClick={async () => {
+        if (detectedCode?.format === "PDF417") {
+          const options = { scale: 4 }
+
+          const image = generatePDF417Barcode(detectedCode.bytes, options)
+
+          const blob = new Blob([image], { type: "image/png" })
+
+          downloadBlob(blob, "cnic-barcode.png")
+        }
+      }}
+    >
+      Download {genericFormatNames[detectedCode?.format] || "Barcode"}
+    </button>
+  )
+
   if (step === 4) {
     return (
       <div className="whitespace-nowrap">
@@ -178,6 +198,12 @@ export default function App() {
             </tr>
             <tr>
               <td>{copyAsJsonButton}</td>
+            </tr>
+            <tr>
+              <td>
+                {["PDF417"].includes(detectedCode?.format) &&
+                  downloadBarcodeButton}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -880,7 +906,7 @@ export default function App() {
         setDetectedCode(detectedCode)
 
         decoding: {
-          if (format === "PDF417") {
+          if (format === "PDF417" && detectedCode.bytes.length === 400) {
             const decoded = data
               .trim()
               .replace(/(.)\x06/g, (m, g) => {
