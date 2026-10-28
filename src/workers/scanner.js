@@ -17,7 +17,7 @@ const isValidImageData = (imageData) => imageData instanceof ImageData
 const isValidImageBitmap = (imageBitmap) => imageBitmap instanceof ImageBitmap
 
 self.onmessage = async (e) => {
-  const images = Array.isArray(e.data) ? e.data : [e.data]
+  const images = e.data.bitmapOrImageDataArray
 
   try {
     const result = []
@@ -45,7 +45,7 @@ self.onmessage = async (e) => {
       }
     }
 
-    if (result.length > 0) self.postMessage(result)
+    if (result.length > 0 || e.data.allwaysAnswer) self.postMessage(result)
   } catch (e) {
     console.log(e)
   }

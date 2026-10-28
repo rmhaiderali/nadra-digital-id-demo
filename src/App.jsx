@@ -898,7 +898,10 @@ export default function App() {
       onScan={async (detectedCodes) => {
         const detectedCode = detectedCodes[0]
 
-        if (!detectedCode) return
+        if (!detectedCode) {
+          toast.error("No Barcode Found")
+          return
+        }
 
         const format = detectedCode.format
         const data = detectedCode.text || ""

@@ -1,4 +1,5 @@
 import "webrtc-adapter"
+import { toast } from "react-toastify"
 import { Fraction } from "fraction.js"
 import { useEffect, useState, useRef } from "react"
 import { getImageDataOrBlobFromImageBitmapSource } from "./barcode-detector/utils"
@@ -99,9 +100,14 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
       if (videoRef.current && videoRef.current.readyState === 4 && !disabled) {
         const bitmap = await createImageBitmap(videoRef.current)
         const sendable = await bitmapToSendable(bitmap)
+
         if (!sendable) return
-        const [message, transfer] = sendable
-        workerRef.current.postMessage(message, [transfer])
+
+        const bitmapOrImageDataArray = [sendable[0]]
+        const transfer = [sendable[1]]
+
+        const message = { bitmapOrImageDataArray }
+        workerRef.current.postMessage(message, transfer)
       }
     }, scanDelay)
 
@@ -125,6 +131,16 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
   const color = disabled ? "gray" : "#00bfff"
   const color2 = disabled ? "gray" : "#ffff00cf"
 
+  async function createImageBitmapSafely(file) {
+    if (!window.createImageBitmap) return null
+
+    try {
+      return await createImageBitmap(file)
+    } catch (error) {
+      return null
+    }
+  }
+
   async function handleSelectedFiles(fileList) {
     const files = Array.from(fileList)
     console.log("Selected Files", files)
@@ -132,18 +148,27 @@ export default function Scanner({ onScan = () => {}, scanDelay = 500 }) {
     const images = files.filter((f) => f.type.startsWith("image/"))
     console.log("Selected Images", images)
 
+    const notSupportedFiles = []
+
     const sendables = await Promise.all(
       images.map(async (image) => {
-        const bitmap = await createImageBitmap(image)
+        const bitmap = await createImageBitmapSafely(image)
+        if (!bitmap) {
+          notSupportedFiles.push(image)
+          return
+        }
         return await bitmapToSendable(bitmap)
       }),
     )
 
+    console.log("Not Supported Files", notSupportedFiles)
+
     const trueSendables = sendables.filter((s) => s)
 
-    const message = trueSendables.map((s) => s[0])
+    const bitmapOrImageDataArray = trueSendables.map((s) => s[0])
     const transfer = trueSendables.map((s) => s[1])
 
+    const message = { bitmapOrImageDataArray, allwaysAnswer: true }
     workerRef.current.postMessage(message, transfer)
   }
 
