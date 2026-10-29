@@ -1,5 +1,4 @@
 import "webrtc-adapter"
-import { toast } from "react-toastify"
 import { Fraction } from "fraction.js"
 import { useEffect, useState, useRef } from "react"
 import { getImageDataOrBlobFromImageBitmapSource } from "./barcode-detector/utils"

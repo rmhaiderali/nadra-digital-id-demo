@@ -3,14 +3,22 @@ import { toast } from "react-toastify"
 import { signal } from "@preact/signals"
 import { useState, useEffect } from "react"
 import nadraDigitalId from "nadra-digital-id"
-import { writeBarcode, prepareZXingModule } from "zxing-wasm/writer"
-import zxingWriterWasmUrl from "/node_modules/zxing-wasm/dist/writer/zxing_writer.wasm?url"
-import { generateBarcode as generatePDF417Barcode } from "retro-pdf417"
 import Scanner from "./Scanner.jsx"
 import Loading from "./Loading.jsx"
 import crackPin from "./utils/crackPin.js"
 import matchSaltDate from "./utils/matchSaltDateAndDecrypt.js"
 import crackSaltDate from "./utils/crackSaltDateAndDecrypt.js"
+import moduleToPng from "./zint-wasm/module-to-png.js"
+
+// barcode writers
+
+import { generateBarcode as generatePDF417Barcode } from "retro-pdf417"
+
+import { writeBarcode, prepareZXingModule } from "zxing-wasm/writer"
+import zxingWriterWasmUrl from "/node_modules/zxing-wasm/dist/writer/zxing_writer.wasm?url"
+
+import Zint from "@rmhaiderali/zint-wasm"
+import zintWasmUrl from "/src/zint-wasm/zint.wasm?url"
 
 // nadraDigitalId.setDebug(true)
 
@@ -19,6 +27,8 @@ const filePaths = { "zxing_writer.wasm": zxingWriterWasmUrl }
 prepareZXingModule({
   overrides: { locateFile: (path) => filePaths[path] },
 })
+
+const zint = await Zint.init(zintWasmUrl)
 
 const dateDelimiter =
   new Date().toLocaleDateString().match(/[\-|\/|\.|]/)?.[0] || "/"
@@ -174,13 +184,57 @@ export default function App() {
       className="w-full"
       onClick={async () => {
         if (detectedCode?.format === "PDF417") {
+          const { bytes } = detectedCode
+
           const options = { scale: 4, rowRepeat: 2 }
 
-          const image = generatePDF417Barcode(detectedCode.bytes, options)
+          const image = generatePDF417Barcode(bytes, options)
 
           const blob = new Blob([image], { type: "image/png" })
 
+          console.log("Downloading Barcode", { bytes, options })
+
           downloadBlob(blob, "cnic-barcode.png")
+        }
+        //
+        else if (detectedCode?.format === "QRCode") {
+          // Restricts whole QR payload encoding to
+          // either numeric, alphanumeric, or byte mode
+          const NO_MULTIBYTE = 201
+
+          function ecLevelInt(level) {
+            return { L: 1, M: 2, Q: 3, H: 4 }[level]
+          }
+
+          function dataMaskInt(mask) {
+            return (mask + 1) << 8
+          }
+
+          const payload = detectedCode.text
+
+          const { ECLevel, DataMask, Version } = JSON.parse(detectedCode.extra)
+
+          const { hasECI } = detectedCode
+
+          const options = {
+            option2: +Version,
+            option1: ecLevelInt(ECLevel),
+            option3: dataMaskInt(DataMask) | NO_MULTIBYTE,
+            eci: hasECI ? 26 : 0,
+          }
+
+          const module = zint.encode(Zint.QRCODE, payload, options)
+
+          const image = moduleToPng(module, {
+            scale: hasECI ? 4 : 6,
+            margin: hasECI ? 3 : 2,
+          })
+
+          const blob = new Blob([image], { type: "image/png" })
+
+          console.log("Downloading QR Code", { payload, options })
+
+          downloadBlob(blob, "cnic-qr-code.png")
         }
       }}
     >
@@ -200,10 +254,7 @@ export default function App() {
               <td>{copyAsJsonButton}</td>
             </tr>
             <tr>
-              <td>
-                {["PDF417"].includes(detectedCode?.format) &&
-                  downloadBarcodeButton}
-              </td>
+              <td>{downloadBarcodeButton}</td>
             </tr>
           </tbody>
         </table>
