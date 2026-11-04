@@ -6,8 +6,8 @@ import nadraDigitalId from "nadra-digital-id"
 import Scanner from "./Scanner.jsx"
 import Loading from "./Loading.jsx"
 import crackPin from "./utils/crackPin.js"
-import matchSaltDate from "./utils/matchSaltDateAndDecrypt.js"
-import crackSaltDate from "./utils/crackSaltDateAndDecrypt.js"
+import matchSaltDateAndDecrypt from "./utils/matchSaltDateAndDecrypt.js"
+import crackSaltDateAndDecrypt from "./utils/crackSaltDateAndDecrypt.js"
 import moduleToPng from "./zint-wasm/module-to-png.js"
 
 // barcode writers
@@ -28,7 +28,12 @@ prepareZXingModule({
   overrides: { locateFile: (path) => filePaths[path] },
 })
 
-const zint = await Zint.init(zintWasmUrl)
+let lazyLoadedZint = null
+
+async function getZint() {
+  if (!lazyLoadedZint) lazyLoadedZint = await Zint.init(zintWasmUrl)
+  return lazyLoadedZint
+}
 
 const dateDelimiter =
   new Date().toLocaleDateString().match(/[\-|\/|\.|]/)?.[0] || "/"
@@ -222,6 +227,8 @@ export default function App() {
             option3: dataMaskInt(DataMask) | NO_MULTIBYTE,
             eci: hasECI ? 26 : 0,
           }
+
+          const zint = await getZint()
 
           const module = zint.encode(Zint.QRCODE, payload, options)
 
@@ -674,7 +681,7 @@ export default function App() {
   }
 
   async function crackSaltDateWrapper(dateStart, dateEnd) {
-    const { error, aborted, data, notfound } = await crackSaltDate(
+    const { error, aborted, data, notfound } = await crackSaltDateAndDecrypt(
       encryptedData,
       pin,
       dateStart,
@@ -715,12 +722,7 @@ export default function App() {
     }
   }
 
-  async function decryptOrShowDocument() {
-    if (crackingSaltDateStatus.value === "cracked") {
-      setStep(3)
-      return
-    }
-
+  async function decryptDocument() {
     if (!saltDate) {
       toast.error("Please select Creation Date")
       return
@@ -730,11 +732,10 @@ export default function App() {
 
     const date = new Date(saltDate)
 
-    const { error, data, notfound } = await matchSaltDate(
+    const { error, data, notfound } = await matchSaltDateAndDecrypt(
       encryptedData,
       pin,
       date,
-      dateFormat,
     )
 
     if (error) {
@@ -932,7 +933,14 @@ export default function App() {
           </tr>
           <tr>
             <td colSpan={2}>
-              <button onClick={decryptOrShowDocument} className="w-full">
+              <button
+                onClick={
+                  crackingSaltDateStatus.value === "cracked"
+                    ? () => setStep(3)
+                    : decryptDocument
+                }
+                className="w-full"
+              >
                 {crackingSaltDateStatus.value === "cracked"
                   ? "Show Document"
                   : "Decrypt"}
@@ -1038,7 +1046,7 @@ export default function App() {
             nadraDigitalId.decode(data)
 
           if (decodeError) {
-            console.log("Failed to decode data", decodeError)
+            console.log("Decoding Error", decodeError)
             break decoding
           }
 
@@ -1052,20 +1060,20 @@ export default function App() {
 
           console.log("Decoded Data", decodedObject)
 
-          const isUnencrypted = "credentialSubject" in decodedObject
+          const isEncrypted = !("credentialSubject" in decodedObject)
 
-          if (isUnencrypted) {
-            const { error: verificationError } =
-              await nadraDigitalId.verify(decodedObject)
-
-            setIsDocumentVerified(!verificationError)
-            setFinalData(decodedObject)
-            setStep(3)
+          if (isEncrypted) {
+            setEncryptedData(decodedObject)
+            setStep(1)
             return
           }
 
-          setEncryptedData(decodedObject)
-          setStep(1)
+          const { error: verificationError } =
+            await nadraDigitalId.verify(decodedObject)
+
+          setIsDocumentVerified(!verificationError)
+          setFinalData(decodedObject)
+          setStep(3)
           return
         }
 
