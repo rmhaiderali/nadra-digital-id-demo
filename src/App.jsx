@@ -103,6 +103,15 @@ const crackedSaltDate = signal("")
 const crackingSaltDateRange = signal("")
 const crackingSaltDateStatus = signal("not started")
 
+function cleanIdNumber(idNumber) {
+  return idNumber?.replace?.(/[^0-9]/g, "").slice(0, 13)
+}
+
+function checkIsMale(idNumber) {
+  const cleanedIdNumber = cleanIdNumber(idNumber) || ""
+  return parseInt(cleanedIdNumber[12]) % 2 === 1
+}
+
 export default function App() {
   const [is12HourCycle, _setIs12HourCycle] = useState(() =>
     JSON.parse(sls.getItem("is12HourCycle") ?? "true"),
@@ -620,6 +629,12 @@ export default function App() {
                 ? fields
                 : fields.filter((f, i) => encryptedData.fields.includes(i))
 
+              const idNumber = fields.find(
+                (f) => f.label === "Identity Number",
+              )?.value
+
+              const isMale = checkIsMale(idNumber)
+
               return fieldsToShow.map((f) => {
                 const normalizedText =
                   nadraDigitalId.normalizeText(f.value).data || f.value
@@ -627,7 +642,9 @@ export default function App() {
                 return (
                   <tr key={f.label}>
                     <td>
-                      <strong>{f.label}:</strong>
+                      <strong>
+                        {isMale ? f.label.replace("/Husband", "") : f.label}:
+                      </strong>
                     </td>
                     <td
                       className={
@@ -1009,13 +1026,19 @@ export default function App() {
               break decoding
             }
 
+            function fatherOrHusbandLabel(idNumber) {
+              return (
+                "Father" + (checkIsMale(idNumber) ? " " : "/Husband") + " Name"
+              )
+            }
+
             setFinalData(
               cleanObject(
                 decoded[2]?.length === 6
                   ? {
                       Name: decoded[4],
-                      "Father/Husband Name": decoded[5],
-                      "Identity Number": decoded[1]?.slice(0, 13),
+                      [fatherOrHusbandLabel(decoded[1])]: decoded[5],
+                      "Identity Number": cleanIdNumber(decoded[1]),
                       "Family Number": decoded[2],
                       "Date of Birth": decoded[3],
                       "Address Line 1": decoded[6],
@@ -1024,8 +1047,8 @@ export default function App() {
                     }
                   : {
                       Name: decoded[5],
-                      "Father/Husband Name": decoded[6],
-                      "Identity Number": decoded[2]?.slice(0, 13),
+                      [fatherOrHusbandLabel(decoded[2])]: decoded[6],
+                      "Identity Number": cleanIdNumber(decoded[2]),
                       "Family Number": decoded[3],
                       "Date of Birth": decoded[4],
                       "Address Line 1": decoded[7],
