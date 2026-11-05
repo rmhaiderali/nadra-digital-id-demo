@@ -9,6 +9,7 @@ import crackPin from "./utils/crackPin.js"
 import matchSaltDateAndDecrypt from "./utils/matchSaltDateAndDecrypt.js"
 import crackSaltDateAndDecrypt from "./utils/crackSaltDateAndDecrypt.js"
 import moduleToPng from "./zint-wasm/module-to-png.js"
+import sls from "./utils/scoped-local-storage.js"
 
 // barcode writers
 
@@ -81,18 +82,18 @@ function toCreatorOptionsString(options) {
 }
 
 window.fullAccess = () => {
-  localStorage.setItem("fullAccess", "true")
+  sls.setItem("fullAccess", "true")
   toast.success("Granted Full Access")
   setTimeout(() => window.location.reload(), 2000)
 }
 
 window.revokeFullAccess = () => {
-  localStorage.removeItem("fullAccess")
+  sls.removeItem("fullAccess")
   toast.success("Revoked Full Access")
   setTimeout(() => window.location.reload(), 2000)
 }
 
-const fullAccess = localStorage.getItem("fullAccess") === "true"
+const fullAccess = sls.getItem("fullAccess") === "true"
 
 const crackedPin = signal("")
 const crackingPinRange = signal("")
@@ -104,12 +105,21 @@ const crackingSaltDateStatus = signal("not started")
 
 export default function App() {
   const [is12HourCycle, _setIs12HourCycle] = useState(() =>
-    JSON.parse(localStorage.getItem("is12HourCycle") ?? "true"),
+    JSON.parse(sls.getItem("is12HourCycle") ?? "true"),
   )
 
   function setIs12HourCycle(value) {
     _setIs12HourCycle(value)
-    localStorage.setItem("is12HourCycle", value)
+    sls.setItem("is12HourCycle", value)
+  }
+
+  const [showAllFields, _setShowAllFields] = useState(() =>
+    JSON.parse(sls.getItem("showAllFields") ?? "false"),
+  )
+
+  function setShowAllFields(value) {
+    _setShowAllFields(value)
+    sls.setItem("showAllFields", value)
   }
 
   // 0: scaning
@@ -301,6 +311,12 @@ export default function App() {
     </button>
   )
 
+  const showAllFieldsButton = (
+    <button className="w-full" onClick={() => setShowAllFields(!showAllFields)}>
+      {showAllFields ? "Show User Selected Fields" : "Show All Fields"}
+    </button>
+  )
+
   const downloadQRCodeButton = (
     <button
       className="w-full"
@@ -464,6 +480,11 @@ export default function App() {
             <tr>
               <td>{toggleHourCycleButton}</td>
             </tr>
+            {fullAccess && (
+              <tr>
+                <td>{showAllFieldsButton}</td>
+              </tr>
+            )}
             <tr>
               <td>{downloadQRCodeButton}</td>
               {encryptedData && (
@@ -520,7 +541,7 @@ export default function App() {
                   <td>
                     <strong>Type:</strong>
                   </td>
-                  <td>{type.join(", ")}</td>
+                  <td>{type.join(" & ")}</td>
                 </tr>
               )
             })}
@@ -590,12 +611,12 @@ export default function App() {
                 (f) => f?.label && f?.value,
               )
 
-              const showAllFields =
-                fullAccess ||
+              const shouldShowAllFields =
+                (fullAccess && showAllFields) ||
                 !encryptedData?.fields?.length ||
                 encryptedData.fields.includes(-1)
 
-              const fieldsToShow = showAllFields
+              const fieldsToShow = shouldShowAllFields
                 ? fields
                 : fields.filter((f, i) => encryptedData.fields.includes(i))
 
