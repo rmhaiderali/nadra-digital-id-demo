@@ -210,7 +210,7 @@ export default function App() {
         if (detectedCode?.format === "PDF417") {
           const { bytes } = detectedCode
 
-          const options = { scale: 4, rowRepeat: 2 }
+          const options = { scale: 10, rowRepeat: 2 }
 
           const image = generatePDF417Barcode(bytes, options)
 
