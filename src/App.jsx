@@ -238,23 +238,27 @@ export default function App() {
 
           const { ECLevel, DataMask, Version } = JSON.parse(detectedCode.extra)
 
-          const { hasECI } = detectedCode
+          const type = detectedCode.hasECI ? "nic2" : "snic"
+
+          const constantsByType = {
+            snic: { scale: 20, margin: 2, eci: 0 },
+            nic2: { scale: 10, margin: 3, eci: 26 },
+          }
+
+          const { scale, margin, eci } = constantsByType[type]
 
           const options = {
+            eci,
             option2: +Version,
             option1: ecLevelInt(ECLevel),
             option3: dataMaskInt(DataMask) | NO_MULTIBYTE,
-            eci: hasECI ? 26 : 0,
           }
 
           const zint = await getZint()
 
           const module = zint.encode(Zint.QRCODE, payload, options)
 
-          const image = moduleToPng(module, {
-            scale: hasECI ? 4 : 6,
-            margin: hasECI ? 3 : 2,
-          })
+          const image = moduleToPng(module, { scale, margin })
 
           const blob = new Blob([image], { type: "image/png" })
 
